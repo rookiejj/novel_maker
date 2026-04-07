@@ -22,6 +22,7 @@ import {
 import {
   MoodEmoji,
   MoodEntry,
+  MoodRecord,
   NovelOptions,
   SavedNovel,
   StoryBibleEntry,
@@ -215,7 +216,7 @@ export default function HomePage() {
             오늘의 기분
           </h2>
           <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
-          <MoodHistory history={moodHistory.slice(0, 7)} />
+          <MoodHistory records={moodHistory.slice(0, 7).map((e, i) => ({ id: String(i), date: e.date, mood: e.emoji }))} />
         </section>
 
         <div className="text-stone-300 text-center text-2xl select-none">✦</div>

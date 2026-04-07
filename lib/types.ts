@@ -22,6 +22,13 @@ export interface MoodEntry {
   label: string;
 }
 
+/** MoodHistory 컴포넌트가 사용하는 타입 */
+export interface MoodRecord {
+  id: string;
+  date: string;   // YYYY-MM-DD
+  mood: MoodEmoji;
+}
+
 // ─── Novel Options ────────────────────────────────────────────────────────────
 
 export type Genre =
