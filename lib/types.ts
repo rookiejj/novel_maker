@@ -58,20 +58,37 @@ export interface NovelOptions {
   length: NovelLength;
 }
 
+// ─── World Bible ──────────────────────────────────────────────────────────────
+// 시리즈 전체에 걸쳐 고정되는 세계관 설정.
+// 첫 소설 저장 시 단 한 번 생성되고, 이후 절대 변경하지 않는다.
+// 새 소설을 쓸 때마다 반드시 프롬프트에 주입한다.
+
+export interface CharacterProfile {
+  name: string;   // 이름
+  role: string;   // 역할 (예: "주인공", "조력자", "라이벌")
+  traits: string; // 성격·외모·직업 등 핵심 특징 한 줄
+}
+
+export interface WorldBible {
+  genre: Genre;                   // 고정 장르 (이후 소설에서 변경 불가)
+  worldSetting: string;           // 세계관/주요 배경 한 줄
+  characters: CharacterProfile[]; // 주요 인물 프로필 (편마다 누적)
+  rules: string[];                // 세계관 규칙 (예: "마법 존재", "근미래 AI 사회")
+  createdAt: string;              // 최초 생성 일자 YYYY-MM-DD
+}
+
 // ─── Story Bible ─────────────────────────────────────────────────────────────
-// 소설 저장 시 Claude(Haiku)가 생성하는 경량 요약본.
-// 새 소설을 생성할 때 원문 대신 이것만 프롬프트에 주입해 토큰을 절약한다.
+// 소설 1편당 저장되는 경량 요약본 (~80 토큰).
+// 원문 대신 프롬프트에 주입해 토큰을 절약한다.
 
 export interface StoryBibleEntry {
   novelId: string;
   title: string;
-  date: string;         // YYYY-MM-DD
-  genre: Genre;
-  mood: string;         // 당일 기분 레이블 (예: "슬퍼")
-  characters: string[]; // ["이름(특징/관계)", ...]   — 없으면 []
-  setting: string;      // 주요 배경 한 줄
-  ending: string;       // 결말 한 줄 요약
-  threads: string[];    // 미해결 복선 / 열린 결말 요소 — 없으면 []
+  date: string;            // YYYY-MM-DD
+  mood: string;            // 당일 기분 레이블
+  ending: string;          // 결말 한 줄 요약
+  threads: string[];       // 미해결 복선 / 열린 결말 요소
+  newCharacters: string[]; // 이번 편에서 새로 등장한 인물 (이름+특징)
 }
 
 // ─── Saved Novel ─────────────────────────────────────────────────────────────

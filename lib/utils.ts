@@ -13,7 +13,7 @@ export function formatDate(iso: string): string {
   });
 }
 
-/** 소설 본문에서 「제목」 형식의 제목을 추출, 없으면 첫 줄을 반환 */
+/** 소설 본문에서 「제목」 형식의 제목을 추출, 없으면 첫 줄 앞 20자 반환 */
 export function extractTitle(content: string): string {
   const match = content.match(/「(.+?)」/);
   if (match) return match[1];

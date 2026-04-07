@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { anthropic } from '@/lib/anthropic';
 import { buildSystemPrompt } from '@/prompts/novelist';
-import { MoodEntry, NovelOptions, StoryBibleEntry } from '@/lib/types';
+import { MoodEntry, NovelOptions, StoryBibleEntry, WorldBible } from '@/lib/types';
 
 export const maxDuration = 300;
 
@@ -11,10 +11,11 @@ export async function POST(req: NextRequest) {
       mood: MoodEntry;
       moodHistory: MoodEntry[];
       options: NovelOptions;
-      storyBibles?: StoryBibleEntry[]; // ← Story Bible 수신
+      worldBible?: WorldBible | null;
+      storyBibles?: StoryBibleEntry[];
     };
 
-    const { mood, moodHistory, options, storyBibles } = body;
+    const { mood, moodHistory, options, worldBible, storyBibles } = body;
 
     if (!mood || !options) {
       return new Response('mood와 options는 필수입니다.', { status: 400 });
@@ -24,7 +25,8 @@ export async function POST(req: NextRequest) {
       mood,
       moodHistory: moodHistory ?? [],
       options,
-      storyBibles: storyBibles ?? [], // ← 프롬프트에 주입
+      worldBible: worldBible ?? null,
+      storyBibles: storyBibles ?? [],
     });
 
     const stream = await anthropic.messages.stream({
@@ -44,8 +46,9 @@ export async function POST(req: NextRequest) {
               chunk.type === 'content_block_delta' &&
               chunk.delta.type === 'text_delta'
             ) {
-              const data = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`;
-              controller.enqueue(encoder.encode(data));
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`)
+              );
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));

@@ -1,54 +1,87 @@
-import { MoodEntry, NovelOptions, StoryBibleEntry } from '@/lib/types';
+import { MoodEntry, NovelOptions, StoryBibleEntry, WorldBible } from '@/lib/types';
 
 export interface PromptInput {
   mood: MoodEntry;
   moodHistory: MoodEntry[];
   options: NovelOptions;
-  storyBibles?: StoryBibleEntry[]; // 연속성 유지를 위한 이전 이야기 요약본
+  worldBible?: WorldBible | null;    // 고정 세계관 (첫 편 이후 항상 존재)
+  storyBibles?: StoryBibleEntry[];   // 편당 경량 요약 (최근 N편)
 }
 
-// ─── Story Bible → 연속성 섹션 ───────────────────────────────────────────────
-// 원문이 아닌 경량 요약만 주입 → 편수가 쌓여도 토큰이 폭발하지 않는다.
-// 최근 5편 × 편당 ~80 토큰 = 최대 ~400 토큰 고정.
+// ─── World Bible → 고정 세계관 섹션 ──────────────────────────────────────────
+// 이 섹션은 매 소설 생성 시 항상 프롬프트에 포함된다.
+// Claude에게 "이 시리즈의 불변 헌법"으로 제시한다.
+
+function buildWorldSection(world: WorldBible): string {
+  const characters = world.characters
+    .map(c => `- ${c.name} (${c.role}): ${c.traits}`)
+    .join('\n');
+
+  const rules = world.rules.length > 0
+    ? world.rules.map(r => `- ${r}`).join('\n')
+    : '- 없음';
+
+  return `
+---
+## ★ 시리즈 세계관 (절대 변경 불가 — 반드시 준수)
+
+이 이야기는 독립된 단편이 아니라 **하나의 연속 시리즈**입니다.
+아래 설정은 시리즈 전체에 걸쳐 고정된 세계관입니다.
+
+**장르:** ${world.genre}
+**배경:** ${world.worldSetting}
+
+**등장인물 프로필 (이름·성격·역할을 임의로 바꾸지 말 것):**
+${characters || '- 아직 등록된 인물 없음'}
+
+**세계관 규칙:**
+${rules}
+
+**금지 사항:**
+- 위 인물들의 이름, 성격, 역할을 바꾸거나 무시하는 것
+- 위 세계관과 맞지 않는 새로운 배경/설정을 도입하는 것
+- 기존 인물을 등장시키지 않고 완전히 새로운 주인공으로 이야기를 시작하는 것
+---`;
+}
+
+// ─── Story Bible → 이전 이야기 흐름 섹션 ────────────────────────────────────
+// 편당 ~80 토큰, 최근 5편만 사용 → 최대 ~400 토큰 고정.
 
 function buildContinuitySection(bibles: StoryBibleEntry[]): string {
   if (!bibles || bibles.length === 0) return '';
 
   const entries = bibles
-    .slice(-5) // 최근 5편만 사용
+    .slice(-5)
     .map((b, i) => {
       const lines: string[] = [
-        `[${i + 1}편 — 「${b.title}」 (${b.date} / ${b.mood} / ${b.genre})]`,
-        `배경: ${b.setting}`,
+        `[${i + 1}편 — 「${b.title}」 (${b.date} / ${b.mood})]`,
+        `결말: ${b.ending}`,
       ];
-      if (b.characters.length > 0) {
-        lines.push(`인물: ${b.characters.join(', ')}`);
-      }
-      lines.push(`결말: ${b.ending}`);
       if (b.threads.length > 0) {
         lines.push(`미해결 복선: ${b.threads.join(' / ')}`);
+      }
+      if (b.newCharacters.length > 0) {
+        lines.push(`이번 편 신규 인물: ${b.newCharacters.join(', ')}`);
       }
       return lines.join('\n');
     })
     .join('\n\n');
 
+  const latest = bibles[bibles.length - 1];
+
   return `
----
-## 연속성 지침 (반드시 준수)
+## 이전 이야기 흐름
 
-이 사용자는 지금까지 아래 이야기들을 만들어왔습니다.
-새 이야기는 이 흐름을 **파괴하지 않고** 자연스럽게 이어져야 합니다.
+아래는 지금까지의 이야기 요약입니다.
+**새 이야기는 반드시 이 흐름의 직접적인 후속편이어야 합니다.**
+전편의 결말 상황에서 자연스럽게 이어지세요.
 
-**규칙:**
-1. 기존 등장인물·장소·사건이 있다면 이를 참조하거나 계승할 것
-2. 미해결 복선이나 열린 결말 요소가 있다면 발전시킬 것
-3. 완전히 무관한 독립 이야기처럼 쓰지 말 것
-4. 오늘의 기분과 선택한 장르·분위기는 반드시 새 이야기에 녹여낼 것
-5. 연속성을 유지하되, 매 이야기마다 새로운 사건과 감정 변화를 만들어낼 것
-
-**이전 이야기 요약 (Story Bible):**
 ${entries}
----
+
+**이번 이야기 작성 지침:**
+- 전편 「${latest.title}」의 결말(${latest.ending}) 이후를 다룰 것
+${latest.threads.length > 0 ? `- 미해결 복선(${latest.threads.join(', ')})을 발전시키거나 해소할 것` : ''}
+- 오늘의 기분(${''})이 이야기의 분위기나 사건에 자연스럽게 반영될 것
 `;
 }
 
@@ -63,18 +96,24 @@ const LENGTH_GUIDE: Record<string, string> = {
 // ─── 메인 프롬프트 빌더 ───────────────────────────────────────────────────────
 
 export function buildSystemPrompt(input: PromptInput): string {
-  const { mood, moodHistory, options, storyBibles } = input;
+  const { mood, moodHistory, options, worldBible, storyBibles } = input;
 
   const recentMoods = moodHistory
     .slice(0, 7)
     .map(e => `${e.date}: ${e.label}`)
     .join(', ');
 
-  const continuity = buildContinuitySection(storyBibles ?? []);
+  const isFirstNovel = !worldBible;
 
-  return `당신은 섬세하고 감성적인 한국어 단편 소설 작가입니다.
-사용자의 오늘 기분과 최근 감정 흐름을 읽어, 그 감정을 담은 단편 소설을 창작합니다.
+  const worldSection = worldBible ? buildWorldSection(worldBible) : '';
+  const continuitySection =
+    storyBibles && storyBibles.length > 0
+      ? buildContinuitySection(storyBibles)
+      : '';
 
+  return `당신은 섬세하고 감성적인 한국어 연재 소설 작가입니다.
+사용자의 감정 흐름을 바탕으로, 하나의 긴 이야기를 여러 편에 걸쳐 이어가는 연재 소설을 씁니다.
+${isFirstNovel ? '\n이번이 시리즈의 **첫 번째 이야기**입니다. 앞으로 이어질 연재의 토대가 될 인물과 세계관을 확립하세요.\n' : ''}
 ## 오늘의 기분
 - 현재 기분: ${mood.label} (${mood.emoji})
 - 최근 7일 기분 흐름: ${recentMoods || '기록 없음'}
@@ -84,7 +123,8 @@ export function buildSystemPrompt(input: PromptInput): string {
 - 분위기: ${options.atmosphere}
 - 필체: ${options.style}
 - 분량: ${LENGTH_GUIDE[options.length] ?? options.length}
-${continuity}
+${worldSection}
+${continuitySection}
 ## 출력 형식
 - 첫 줄에 소설 제목을 「제목」 형식으로 작성
 - 이후 본문을 작성
