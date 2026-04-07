@@ -1,33 +1,22 @@
 import { NextRequest } from 'next/server';
 import { anthropic } from '@/lib/anthropic';
 import { buildSystemPrompt } from '@/prompts/novelist';
-import { MoodEntry, NovelOptions, StoryBibleEntry, WorldBible } from '@/lib/types';
+import { NovelConfig, MoodRecord } from '@/lib/types';
 
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as {
-      mood: MoodEntry;
-      moodHistory: MoodEntry[];
-      options: NovelOptions;
-      worldBible?: WorldBible | null;
-      storyBibles?: StoryBibleEntry[];
+    const { config, recentMoods } = await req.json() as {
+      config: NovelConfig;
+      recentMoods: MoodRecord[];
     };
 
-    const { mood, moodHistory, options, worldBible, storyBibles } = body;
-
-    if (!mood || !options) {
-      return new Response('mood와 options는 필수입니다.', { status: 400 });
+    if (!config) {
+      return new Response('config는 필수입니다.', { status: 400 });
     }
 
-    const systemPrompt = buildSystemPrompt({
-      mood,
-      moodHistory: moodHistory ?? [],
-      options,
-      worldBible: worldBible ?? null,
-      storyBibles: storyBibles ?? [],
-    });
+    const systemPrompt = buildSystemPrompt({ config, recentMoods: recentMoods ?? [] });
 
     const stream = await anthropic.messages.stream({
       model: 'claude-opus-4-5',
@@ -51,7 +40,9 @@ export async function POST(req: NextRequest) {
               );
             }
           }
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.enqueue(encoder.encode('event: done\ndata: {}\n\n'));
+        } catch {
+          controller.enqueue(encoder.encode('event: error\ndata: {}\n\n'));
         } finally {
           controller.close();
         }

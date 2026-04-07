@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/layout/Header';
 import MoodSelector from '@/components/mood/MoodSelector';
 import MoodHistory from '@/components/mood/MoodHistory';
@@ -9,10 +9,10 @@ import NovelViewer from '@/components/novel/NovelViewer';
 import NovelCard from '@/components/novel/NovelCard';
 import NovelReadModal from '@/components/novel/NovelReadModal';
 import {
-  loadMoodHistory,
   getTodayMood,
-  saveNovel,
+  loadMoodHistory,
   loadNovels,
+  deleteNovel,
   saveStoryBible,
   loadStoryBibles,
   saveWorldBible,
@@ -20,37 +20,28 @@ import {
   mergeCharactersIntoWorldBible,
 } from '@/lib/storage';
 import {
-  MoodEmoji,
-  MoodEntry,
-  MoodRecord,
-  NovelOptions,
-  SavedNovel,
-  StoryBibleEntry,
-  WorldBible,
+  MoodEmoji, MoodEntry, MoodRecord,
+  NovelConfig, NovelOptions, NovelRecord,
+  StoryBibleEntry, WorldBible,
   MOOD_MAP,
 } from '@/lib/types';
-import { extractTitle, generateId } from '@/lib/utils';
 
-type Step = 'home' | 'wizard' | 'generating' | 'done';
+type Step = 'home' | 'wizard' | 'viewing';
 
 export default function HomePage() {
-  const [todayMood, setTodayMood] = useState<MoodEntry | null>(null);
+  const [todayMood,   setTodayMood]   = useState<MoodEntry | null>(null);
   const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
 
-  const [step, setStep] = useState<Step>('home');
-  const [streamedText, setStreamedText] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [savedId, setSavedId] = useState<string | null>(null);
+  const [step,          setStep]          = useState<Step>('home');
+  const [currentConfig, setCurrentConfig] = useState<NovelConfig | null>(null);
 
-  const [novels, setNovels] = useState<SavedNovel[]>([]);
-  const [readingNovel, setReadingNovel] = useState<SavedNovel | null>(null);
+  const [novels,       setNovels]       = useState<NovelRecord[]>([]);
+  const [readingNovel, setReadingNovel] = useState<NovelRecord | null>(null);
 
   const [storyBibles, setStoryBibles] = useState<StoryBibleEntry[]>([]);
-  const [worldBible, setWorldBible] = useState<WorldBible | null>(null);
+  const [worldBible,  setWorldBible]  = useState<WorldBible | null>(null);
 
-  const wizardOptionsRef = useRef<NovelOptions | null>(null);
-
-  // ─── 초기 로드 ───────────────────────────────────────────────────────────────
+  // ─── 초기 로드 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     setTodayMood(getTodayMood());
     setMoodHistory(loadMoodHistory());
@@ -59,10 +50,9 @@ export default function HomePage() {
     setWorldBible(loadWorldBible());
   }, []);
 
-  // ─── 기분 선택 ───────────────────────────────────────────────────────────────
+  // ─── 기분 선택 콜백 ────────────────────────────────────────────────────────
   function handleMoodSelect(emoji: MoodEmoji) {
-    // MoodSelector가 내부적으로 moodStorage.saveMood()를 이미 호출하므로
-    // 여기서는 state만 갱신한다.
+    // MoodSelector 내부에서 moodStorage.saveMood() 이미 호출 → state만 갱신
     const entry: MoodEntry = {
       date: new Date().toISOString().slice(0, 10),
       emoji,
@@ -72,102 +62,38 @@ export default function HomePage() {
     setMoodHistory(loadMoodHistory());
   }
 
-  // ─── 소설 생성 ───────────────────────────────────────────────────────────────
-  async function handleGenerate(options: NovelOptions) {
-    if (!todayMood) return;
-
-    wizardOptionsRef.current = options;
-    setStep('generating');
-    setStreamedText('');
-    setSavedId(null);
-
-    try {
-      const res = await fetch('/api/novel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mood: todayMood,
-          moodHistory,
-          options,
-          worldBible,    // ← 고정 세계관 전달 (없으면 null → 첫 편)
-          storyBibles,   // ← 편당 경량 요약 전달
-        }),
-      });
-
-      if (!res.ok || !res.body) throw new Error('소설 생성 실패');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6);
-          if (payload === '[DONE]') break;
-          try {
-            const { text } = JSON.parse(payload);
-            setStreamedText(prev => prev + text);
-          } catch { /* skip malformed */ }
-        }
-      }
-
-      setStep('done');
-    } catch (err) {
-      console.error(err);
-      setStep('home');
-      alert('소설 생성 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
+  // ─── 위저드 완료 ───────────────────────────────────────────────────────────
+  function handleWizardComplete(options: NovelOptions) {
+    const config: NovelConfig = {
+      ...options,
+      worldBible:  worldBible  ?? null,
+      storyBibles: storyBibles ?? [],
+    };
+    setCurrentConfig(config);
+    setStep('viewing');
   }
 
-  // ─── 소설 저장 ───────────────────────────────────────────────────────────────
-  // 흐름:
-  // 1) 원문 → localStorage 저장
-  // 2) /api/summarize 호출 → Story Bible + (첫 편이면 World Bible) 수신
-  // 3) Story Bible → localStorage 저장
-  // 4) World Bible → 첫 편이면 새로 저장, 후속편이면 신규 인물만 merge
-  async function handleSave() {
-    if (!streamedText || !todayMood || !wizardOptionsRef.current) return;
-
-    setIsSaving(true);
-
-    const id = generateId();
-    const title = extractTitle(streamedText);
-    const date = new Date().toISOString().slice(0, 10);
-    const isFirstNovel = !worldBible;
-
-    // 1) 원문 저장
-    const novel: SavedNovel = {
-      id,
-      title,
-      content: streamedText,
-      mood: todayMood.emoji,
-      options: wizardOptionsRef.current,
-      createdAt: new Date().toISOString(),
-    };
-    saveNovel(novel);
-    setSavedId(id);
+  // ─── 소설 저장 후 콜백 ─────────────────────────────────────────────────────
+  // NovelViewer 내부에서 novelStorage.save() 호출 후 여기로 전달.
+  // Story Bible / World Bible 생성을 비동기로 처리한다.
+  async function handleNovelSaved(record: NovelRecord) {
     setNovels(loadNovels());
 
-    // 2~4) Story Bible / World Bible 생성 (실패해도 저장은 완료)
+    const isFirstNovel = !worldBible;
+    const date = new Date().toISOString().slice(0, 10);
+    const moodLabel = todayMood ? MOOD_MAP[todayMood.emoji].label : '';
+
     try {
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          novelId: id,
-          title,
-          content: streamedText,
-          genre: wizardOptionsRef.current.genre,
+          novelId:       record.id,
+          title:         record.title,
+          content:       record.content,
+          genre:         record.config.genre,
           date,
-          mood: todayMood.label,
+          mood:          moodLabel,
           isFirstNovel,
           existingWorld: worldBible ?? undefined,
         }),
@@ -176,22 +102,18 @@ export default function HomePage() {
       if (res.ok) {
         const { storyBible, worldBible: newWorldBible, newCharacterProfiles } =
           await res.json() as {
-            storyBible: StoryBibleEntry;
-            worldBible: WorldBible | null;
+            storyBible:           StoryBibleEntry;
+            worldBible:           WorldBible | null;
             newCharacterProfiles: WorldBible['characters'];
           };
 
-        // Story Bible 저장
         saveStoryBible(storyBible);
         setStoryBibles(loadStoryBibles());
 
-        // World Bible 처리
         if (isFirstNovel && newWorldBible) {
-          // 첫 편: 새 World Bible 저장
           saveWorldBible(newWorldBible);
           setWorldBible(newWorldBible);
         } else if (!isFirstNovel && newCharacterProfiles?.length > 0) {
-          // 후속편: 신규 인물만 기존 World Bible에 누적
           mergeCharactersIntoWorldBible(newCharacterProfiles);
           setWorldBible(loadWorldBible());
         }
@@ -199,11 +121,24 @@ export default function HomePage() {
     } catch (err) {
       console.warn('[Story/World Bible] 생성 실패 (저장은 완료됨):', err);
     }
-
-    setIsSaving(false);
   }
 
-  // ─── 렌더 ────────────────────────────────────────────────────────────────────
+  // ─── 소설 삭제 ─────────────────────────────────────────────────────────────
+  function handleDelete(id: string) {
+    deleteNovel(id);
+    setNovels(loadNovels());
+  }
+
+  // ─── MoodEntry → MoodRecord 변환 헬퍼 ─────────────────────────────────────
+  const recentMoods: MoodRecord[] = moodHistory
+    .slice(0, 7)
+    .map((e, i) => ({ id: String(i), date: e.date, mood: e.emoji }));
+
+  const baseMood: MoodRecord | null = todayMood
+    ? { id: '0', date: todayMood.date, mood: todayMood.emoji }
+    : null;
+
+  // ─── 렌더 ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800">
       <Header />
@@ -216,7 +151,7 @@ export default function HomePage() {
             오늘의 기분
           </h2>
           <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
-          <MoodHistory records={moodHistory.slice(0, 7).map((e, i) => ({ id: String(i), date: e.date, mood: e.emoji }))} />
+          <MoodHistory records={recentMoods} />
         </section>
 
         <div className="text-stone-300 text-center text-2xl select-none">✦</div>
@@ -246,30 +181,25 @@ export default function HomePage() {
         {/* 위저드 */}
         {step === 'wizard' && (
           <NovelWizard
-            lockedGenre={worldBible?.genre}   // ← World Bible이 있으면 장르 잠금
-            onGenerate={handleGenerate}
+            lockedGenre={worldBible?.genre}
+            onGenerate={handleWizardComplete}
             onCancel={() => setStep('home')}
           />
         )}
 
-        {/* 생성 중 / 완료 */}
-        {(step === 'generating' || step === 'done') && (
+        {/* NovelViewer: 스트리밍 + 저장 자체 처리 */}
+        {step === 'viewing' && currentConfig && (
           <NovelViewer
-            text={streamedText}
-            isStreaming={step === 'generating'}
-            isSaving={isSaving}
-            isSaved={!!savedId}
-            onSave={handleSave}
-            onReset={() => {
-              setStep('home');
-              setStreamedText('');
-              setSavedId(null);
-            }}
+            config={currentConfig}
+            recentMoods={recentMoods}
+            baseMood={baseMood}
+            onSaved={handleNovelSaved}
+            onClose={() => setStep('home')}
           />
         )}
 
         {/* 저장된 소설 목록 */}
-        {novels.length > 0 && (
+        {novels.length > 0 && step === 'home' && (
           <section>
             <h2 className="text-sm font-semibold text-stone-400 uppercase tracking-widest mb-4">
               지난 이야기
@@ -279,7 +209,8 @@ export default function HomePage() {
                 <NovelCard
                   key={novel.id}
                   novel={novel}
-                  onClick={() => setReadingNovel(novel)}
+                  onRead={setReadingNovel}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>

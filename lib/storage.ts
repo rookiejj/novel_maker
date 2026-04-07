@@ -1,18 +1,22 @@
-import { MoodEntry, MoodEmoji, MOOD_MAP, SavedNovel, StoryBibleEntry, WorldBible } from './types';
+import {
+  MoodEntry, MoodEmoji, MOOD_MAP,
+  NovelRecord, NovelConfig,
+  StoryBibleEntry, WorldBible,
+} from './types';
+import { generateId } from './utils';
 
 const MOOD_KEY  = 'sagas_moods';
 const NOVEL_KEY = 'sagas_novels';
 const BIBLE_KEY = 'sagas_story_bibles';
 const WORLD_KEY = 'sagas_world_bible';
 
-// Mood
+// ─── Mood ─────────────────────────────────────────────────────────────────────
 
 export function saveMood(entry: MoodEntry): void {
   if (typeof window === 'undefined') return;
   const history = loadMoodHistory();
   const idx = history.findIndex(e => e.date === entry.date);
-  if (idx >= 0) history[idx] = entry;
-  else history.unshift(entry);
+  if (idx >= 0) history[idx] = entry; else history.unshift(entry);
   localStorage.setItem(MOOD_KEY, JSON.stringify(history.slice(0, 30)));
 }
 
@@ -27,35 +31,32 @@ export function getTodayMood(): MoodEntry | null {
   return loadMoodHistory().find(e => e.date === today) ?? null;
 }
 
-/** MoodSelector 컴포넌트가 사용하는 객체 인터페이스 호환용 */
 export const moodStorage = {
   saveMood(emoji: MoodEmoji): void {
-    const entry: MoodEntry = {
+    saveMood({
       date: new Date().toISOString().slice(0, 10),
       emoji,
       label: MOOD_MAP[emoji].label,
-    };
-    saveMood(entry);
+    });
   },
   getTodayMood,
   loadMoodHistory,
 };
 
-// Novel
+// ─── Novel ────────────────────────────────────────────────────────────────────
 
-export function saveNovel(novel: SavedNovel): void {
-  if (typeof window === 'undefined') return;
-  const novels = loadNovels();
-  const idx = novels.findIndex(n => n.id === novel.id);
-  if (idx >= 0) novels[idx] = novel;
-  else novels.unshift(novel);
-  localStorage.setItem(NOVEL_KEY, JSON.stringify(novels));
-}
-
-export function loadNovels(): SavedNovel[] {
+export function loadNovels(): NovelRecord[] {
   if (typeof window === 'undefined') return [];
   try { return JSON.parse(localStorage.getItem(NOVEL_KEY) || '[]'); }
   catch { return []; }
+}
+
+export function saveNovel(novel: NovelRecord): void {
+  if (typeof window === 'undefined') return;
+  const novels = loadNovels();
+  const idx = novels.findIndex(n => n.id === novel.id);
+  if (idx >= 0) novels[idx] = novel; else novels.unshift(novel);
+  localStorage.setItem(NOVEL_KEY, JSON.stringify(novels));
 }
 
 export function deleteNovel(id: string): void {
@@ -63,14 +64,36 @@ export function deleteNovel(id: string): void {
   localStorage.setItem(NOVEL_KEY, JSON.stringify(loadNovels().filter(n => n.id !== id)));
 }
 
-// Story Bible
+/** NovelViewer가 사용하는 객체 인터페이스 */
+export const novelStorage = {
+  save({ title, content, config, baseMood }: {
+    title: string;
+    content: string;
+    config: NovelConfig;
+    baseMood: string;
+  }): NovelRecord {
+    const record: NovelRecord = {
+      id: generateId(),
+      title,
+      content,
+      config,
+      baseMood: baseMood as MoodEmoji,
+      createdAt: Date.now(),
+    };
+    saveNovel(record);
+    return record;
+  },
+  loadAll: loadNovels,
+  delete: deleteNovel,
+};
+
+// ─── Story Bible ──────────────────────────────────────────────────────────────
 
 export function saveStoryBible(entry: StoryBibleEntry): void {
   if (typeof window === 'undefined') return;
   const bibles = loadStoryBibles();
   const idx = bibles.findIndex(b => b.novelId === entry.novelId);
-  if (idx >= 0) bibles[idx] = entry;
-  else bibles.push(entry);
+  if (idx >= 0) bibles[idx] = entry; else bibles.push(entry);
   localStorage.setItem(BIBLE_KEY, JSON.stringify(bibles));
 }
 
@@ -85,7 +108,7 @@ export function deleteStoryBible(novelId: string): void {
   localStorage.setItem(BIBLE_KEY, JSON.stringify(loadStoryBibles().filter(b => b.novelId !== novelId)));
 }
 
-// World Bible
+// ─── World Bible ──────────────────────────────────────────────────────────────
 
 export function saveWorldBible(world: WorldBible): void {
   if (typeof window === 'undefined') return;
@@ -100,18 +123,13 @@ export function loadWorldBible(): WorldBible | null {
   } catch { return null; }
 }
 
-/**
- * 새 편에서 등장한 신규 인물을 World Bible에 누적.
- * 이름이 이미 존재하면 덮어쓰지 않는다 (최초 설정 우선).
- */
 export function mergeCharactersIntoWorldBible(
   newCharacters: Array<{ name: string; role: string; traits: string }>
 ): void {
   const world = loadWorldBible();
   if (!world) return;
   for (const nc of newCharacters) {
-    const exists = world.characters.some(c => c.name === nc.name);
-    if (!exists) world.characters.push(nc);
+    if (!world.characters.some(c => c.name === nc.name)) world.characters.push(nc);
   }
   saveWorldBible(world);
 }
