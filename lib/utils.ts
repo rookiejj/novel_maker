@@ -5,30 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric',
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 }
 
-export function formatRelativeDate(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const minutes = Math.floor(diff / 60_000);
-  const hours   = Math.floor(diff / 3_600_000);
-  const days    = Math.floor(diff / 86_400_000);
-
-  if (minutes < 1)   return '방금 전';
-  if (minutes < 60)  return `${minutes}분 전`;
-  if (hours   < 24)  return `${hours}시간 전`;
-  if (days    < 7)   return `${days}일 전`;
-  return formatDate(timestamp);
+/** 소설 본문에서 「제목」 형식의 제목을 추출, 없으면 첫 줄을 반환 */
+export function extractTitle(content: string): string {
+  const match = content.match(/「(.+?)」/);
+  if (match) return match[1];
+  const firstLine = content.split('\n').find(l => l.trim());
+  return firstLine?.slice(0, 20) ?? '무제';
 }
 
-/** Strip the title line ("# 제목") from streamed novel content */
-export function extractTitle(raw: string): { title: string; body: string } {
-  const lines = raw.trim().split('\n');
-  const titleLine = lines.find(l => l.startsWith('#'));
-  const title = titleLine ? titleLine.replace(/^#+\s*/, '').trim() : '이름 없는 이야기';
-  const body  = lines.filter(l => l !== titleLine).join('\n').trim();
-  return { title, body };
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

@@ -1,76 +1,69 @@
 import { NextRequest } from 'next/server';
-import getAnthropicClient from '@/lib/anthropic';
-import { buildNovelPrompt } from '@/prompts/novelist';
-import type { GenerateNovelRequest } from '@/lib/types';
-import { NOVEL_LENGTH_MAP } from '@/lib/types';
+import { anthropic } from '@/lib/anthropic';
+import { buildSystemPrompt } from '@/prompts/novelist';
+import { MoodEntry, NovelOptions, StoryBibleEntry } from '@/lib/types';
 
 export const maxDuration = 300;
 
-type SSEEvent = 'chunk' | 'done' | 'error';
-
-function createSSEResponse(): {
-  stream: ReadableStream<Uint8Array>;
-  send: (event: SSEEvent, data: string) => void;
-  close: () => void;
-} {
-  const encoder = new TextEncoder();
-  let controller: ReadableStreamDefaultController<Uint8Array>;
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(c) { controller = c; },
-  });
-
-  const send = (event: SSEEvent, data: string) => {
-    controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify({ text: data })}\n\n`));
-  };
-  const close = () => controller.close();
-
-  return { stream, send, close };
-}
-
 export async function POST(req: NextRequest) {
-  const body = await req.json() as GenerateNovelRequest;
-  const { config, recentMoods } = body;
+  try {
+    const body = await req.json() as {
+      mood: MoodEntry;
+      moodHistory: MoodEntry[];
+      options: NovelOptions;
+      storyBibles?: StoryBibleEntry[]; // ← Story Bible 수신
+    };
 
-  const { stream, send, close } = createSSEResponse();
+    const { mood, moodHistory, options, storyBibles } = body;
 
-  (async () => {
-    try {
-      const anthropic = getAnthropicClient();
-      const { system, user } = buildNovelPrompt(config, recentMoods);
-
-      const maxTokens = NOVEL_LENGTH_MAP[config.length].tokens;
-
-      const novelStream = anthropic.messages.stream({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: 'user', content: user }],
-      });
-
-      for await (const event of novelStream) {
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          send('chunk', event.delta.text);
-        }
-      }
-
-      send('done', '');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '알 수 없는 오류';
-      send('error', message);
-    } finally {
-      close();
+    if (!mood || !options) {
+      return new Response('mood와 options는 필수입니다.', { status: 400 });
     }
-  })();
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type':  'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection':    'keep-alive',
-    },
-  });
+    const systemPrompt = buildSystemPrompt({
+      mood,
+      moodHistory: moodHistory ?? [],
+      options,
+      storyBibles: storyBibles ?? [], // ← 프롬프트에 주입
+    });
+
+    const stream = await anthropic.messages.stream({
+      model: 'claude-opus-4-5',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: '오늘의 이야기를 써주세요.' }],
+    });
+
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            if (
+              chunk.type === 'content_block_delta' &&
+              chunk.delta.type === 'text_delta'
+            ) {
+              const data = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    });
+  } catch (err) {
+    console.error('[/api/novel]', err);
+    return new Response('Internal Server Error', { status: 500 });
+  }
 }

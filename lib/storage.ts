@@ -1,81 +1,83 @@
-import type { MoodRecord, NovelRecord, MoodType } from './types';
-import { v4 as uuidv4 } from 'uuid';
+import { MoodEntry, SavedNovel, StoryBibleEntry } from './types';
 
-const KEYS = {
-  MOODS:  'story_moods_v1',
-  NOVELS: 'story_novels_v1',
-} as const;
+const MOOD_KEY   = 'sagas_moods';
+const NOVEL_KEY  = 'sagas_novels';
+const BIBLE_KEY  = 'sagas_story_bibles';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Mood ─────────────────────────────────────────────────────────────────────
 
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+export function saveMood(entry: MoodEntry): void {
+  if (typeof window === 'undefined') return;
+  const history = loadMoodHistory();
+  const idx = history.findIndex(e => e.date === entry.date);
+  if (idx >= 0) history[idx] = entry;
+  else history.unshift(entry);
+  localStorage.setItem(MOOD_KEY, JSON.stringify(history.slice(0, 30)));
 }
 
-function safeRead<T>(key: string): T[] {
+export function loadMoodHistory(): MoodEntry[] {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(key) ?? '[]') as T[];
+    return JSON.parse(localStorage.getItem(MOOD_KEY) || '[]');
   } catch {
     return [];
   }
 }
 
-function safeWrite<T>(key: string, data: T[]): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(key, JSON.stringify(data));
+export function getTodayMood(): MoodEntry | null {
+  const today = new Date().toISOString().slice(0, 10);
+  return loadMoodHistory().find(e => e.date === today) ?? null;
 }
 
-// ─── Mood Storage ─────────────────────────────────────────────────────────────
+// ─── Novel ────────────────────────────────────────────────────────────────────
 
-export const moodStorage = {
-  getAll(): MoodRecord[] {
-    return safeRead<MoodRecord>(KEYS.MOODS).sort((a, b) => b.timestamp - a.timestamp);
-  },
+export function saveNovel(novel: SavedNovel): void {
+  if (typeof window === 'undefined') return;
+  const novels = loadNovels();
+  const idx = novels.findIndex(n => n.id === novel.id);
+  if (idx >= 0) novels[idx] = novel;
+  else novels.unshift(novel);
+  localStorage.setItem(NOVEL_KEY, JSON.stringify(novels));
+}
 
-  getRecent(days = 7): MoodRecord[] {
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-    return this.getAll().filter(r => r.timestamp >= cutoff);
-  },
+export function loadNovels(): SavedNovel[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(NOVEL_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
 
-  getTodayMood(): MoodRecord | null {
-    const today = getToday();
-    return this.getAll().find(r => r.date === today) ?? null;
-  },
+export function deleteNovel(id: string): void {
+  if (typeof window === 'undefined') return;
+  const novels = loadNovels().filter(n => n.id !== id);
+  localStorage.setItem(NOVEL_KEY, JSON.stringify(novels));
+}
 
-  saveMood(mood: MoodType): MoodRecord {
-    const today = getToday();
-    const all = safeRead<MoodRecord>(KEYS.MOODS);
+// ─── Story Bible ──────────────────────────────────────────────────────────────
+// 원문 대신 경량 요약만 보관. 새 소설 생성 시 이것만 프롬프트에 주입.
 
-    // Replace today's if already exists
-    const filtered = all.filter(r => r.date !== today);
-    const record: MoodRecord = { id: uuidv4(), mood, date: today, timestamp: Date.now() };
+export function saveStoryBible(entry: StoryBibleEntry): void {
+  if (typeof window === 'undefined') return;
+  const bibles = loadStoryBibles();
+  const idx = bibles.findIndex(b => b.novelId === entry.novelId);
+  if (idx >= 0) bibles[idx] = entry;
+  else bibles.push(entry);
+  localStorage.setItem(BIBLE_KEY, JSON.stringify(bibles));
+}
 
-    safeWrite(KEYS.MOODS, [record, ...filtered]);
-    return record;
-  },
-};
+export function loadStoryBibles(): StoryBibleEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(BIBLE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
 
-// ─── Novel Storage ────────────────────────────────────────────────────────────
-
-export const novelStorage = {
-  getAll(): NovelRecord[] {
-    return safeRead<NovelRecord>(KEYS.NOVELS).sort((a, b) => b.createdAt - a.createdAt);
-  },
-
-  getById(id: string): NovelRecord | null {
-    return this.getAll().find(r => r.id === id) ?? null;
-  },
-
-  save(record: Omit<NovelRecord, 'id' | 'createdAt'>): NovelRecord {
-    const all = safeRead<NovelRecord>(KEYS.NOVELS);
-    const novel: NovelRecord = { ...record, id: uuidv4(), createdAt: Date.now() };
-    safeWrite(KEYS.NOVELS, [novel, ...all]);
-    return novel;
-  },
-
-  delete(id: string): void {
-    const filtered = safeRead<NovelRecord>(KEYS.NOVELS).filter(r => r.id !== id);
-    safeWrite(KEYS.NOVELS, filtered);
-  },
-};
+export function deleteStoryBible(novelId: string): void {
+  if (typeof window === 'undefined') return;
+  const bibles = loadStoryBibles().filter(b => b.novelId !== novelId);
+  localStorage.setItem(BIBLE_KEY, JSON.stringify(bibles));
+}

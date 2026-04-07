@@ -1,16 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-// Server-only singleton — never import this in client components
-const getAnthropicClient = (() => {
-  let client: Anthropic | null = null;
-  return () => {
-    if (!client) {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
-      client = new Anthropic({ apiKey });
-    }
-    return client;
-  };
-})();
-
-export default getAnthropicClient;
+// 서버 전용 싱글턴 — 클라이언트 번들에 포함되지 않도록 주의
+export const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
