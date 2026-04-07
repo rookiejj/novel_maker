@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/novel/route.ts": {
+    "api/novel/route": {
       "maxDuration": 300
     }
   }
