@@ -1,7 +1,7 @@
 // ─── Mood ────────────────────────────────────────────────────────────────────
 
 export type MoodEmoji = '😊' | '😌' | '🤩' | '😰' | '😢' | '😴' | '😤' | '😑';
-export type MoodType = MoodEmoji; // 호환용 별칭
+export type MoodType = MoodEmoji;
 
 export const MOOD_MAP: Record<MoodEmoji, { emoji: string; label: string; tw: string }> = {
   '😊': { emoji: '😊', label: '행복해',   tw: 'border-yellow-300 bg-yellow-50 text-yellow-700' },
@@ -15,14 +15,14 @@ export const MOOD_MAP: Record<MoodEmoji, { emoji: string; label: string; tw: str
 };
 
 export interface MoodEntry {
-  date: string; // YYYY-MM-DD
+  date: string;
   emoji: MoodEmoji;
   label: string;
 }
 
 export interface MoodRecord {
   id: string;
-  date: string;  // YYYY-MM-DD
+  date: string;
   mood: MoodEmoji;
 }
 
@@ -63,31 +63,40 @@ export const ATMOSPHERE_MAP: Record<Atmosphere, { label: string }> = {
   '잔잔한':      { label: '잔잔한'      },
 };
 
-/**
- * NovelConfig — 소설 생성에 필요한 모든 설정.
- * worldBible/storyBibles를 포함해 API 호출 시 config 하나로 전달한다.
- */
 export interface NovelConfig {
   genre: Genre;
   atmosphere: Atmosphere;
   style: WritingStyle;
   length: NovelLength;
+  seriesId?: string;           // ← 소속 시리즈 ID
   worldBible?: WorldBible | null;
   storyBibles?: StoryBibleEntry[];
 }
 
-export type NovelOptions = NovelConfig; // 호환용 별칭
+export type NovelOptions = NovelConfig;
 
 export interface NovelRecord {
   id: string;
+  seriesId: string;            // ← 소속 시리즈 ID
   title: string;
   content: string;
   config: NovelConfig;
   baseMood: MoodEmoji;
-  createdAt: number; // Unix timestamp (ms)
+  createdAt: number;
 }
 
-export type SavedNovel = NovelRecord; // 호환용 별칭
+export type SavedNovel = NovelRecord;
+
+// ─── Series ───────────────────────────────────────────────────────────────────
+// 하나의 연재 = 고정 장르 + WorldBible + 여러 편의 NovelRecord
+
+export interface Series {
+  id: string;
+  title: string;     // 예: "봄의 연대기" (WorldBible 확정 후 worldSetting 기반으로 업데이트)
+  genre: Genre;
+  episodeCount: number;
+  createdAt: number;
+}
 
 // ─── World Bible ──────────────────────────────────────────────────────────────
 
@@ -98,17 +107,19 @@ export interface CharacterProfile {
 }
 
 export interface WorldBible {
+  seriesId: string;            // ← 소속 시리즈 ID
   genre: Genre;
   worldSetting: string;
   characters: CharacterProfile[];
   rules: string[];
-  createdAt: string; // YYYY-MM-DD
+  createdAt: string;
 }
 
 // ─── Story Bible ─────────────────────────────────────────────────────────────
 
 export interface StoryBibleEntry {
   novelId: string;
+  seriesId: string;            // ← 소속 시리즈 ID
   title: string;
   date: string;
   mood: string;

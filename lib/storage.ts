@@ -1,14 +1,17 @@
 import {
   MoodEntry, MoodEmoji, MOOD_MAP,
   NovelRecord, NovelConfig,
-  StoryBibleEntry, WorldBible,
+  Series, WorldBible, StoryBibleEntry,
+  Genre,
 } from './types';
 import { generateId } from './utils';
 
-const MOOD_KEY  = 'sagas_moods';
-const NOVEL_KEY = 'sagas_novels';
-const BIBLE_KEY = 'sagas_story_bibles';
-const WORLD_KEY = 'sagas_world_bible';
+const MOOD_KEY          = 'sagas_moods';
+const NOVEL_KEY         = 'sagas_novels';
+const BIBLE_KEY         = 'sagas_story_bibles';
+const WORLD_KEY         = 'sagas_world_bibles';  // 복수 — 시리즈마다 하나
+const SERIES_KEY        = 'sagas_series';
+const ACTIVE_SERIES_KEY = 'sagas_active_series_id';
 
 // ─── Mood ─────────────────────────────────────────────────────────────────────
 
@@ -43,25 +46,78 @@ export const moodStorage = {
   loadMoodHistory,
 };
 
+// ─── Series ───────────────────────────────────────────────────────────────────
+
+export function loadAllSeries(): Series[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(SERIES_KEY) || '[]'); }
+  catch { return []; }
+}
+
+export function saveSeries(series: Series): void {
+  if (typeof window === 'undefined') return;
+  const all = loadAllSeries();
+  const idx = all.findIndex(s => s.id === series.id);
+  if (idx >= 0) all[idx] = series; else all.unshift(series);
+  localStorage.setItem(SERIES_KEY, JSON.stringify(all));
+}
+
+export function deleteSeries(id: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SERIES_KEY, JSON.stringify(loadAllSeries().filter(s => s.id !== id)));
+}
+
+/** 특정 시리즈의 episodeCount를 +1 업데이트 */
+export function incrementEpisodeCount(seriesId: string): void {
+  const all = loadAllSeries();
+  const s = all.find(s => s.id === seriesId);
+  if (s) { s.episodeCount += 1; localStorage.setItem(SERIES_KEY, JSON.stringify(all)); }
+}
+
+/** 시리즈 제목을 worldSetting 기반으로 업데이트 */
+export function updateSeriesTitle(seriesId: string, title: string): void {
+  const all = loadAllSeries();
+  const s = all.find(s => s.id === seriesId);
+  if (s) { s.title = title; localStorage.setItem(SERIES_KEY, JSON.stringify(all)); }
+}
+
+// ─── Active Series ────────────────────────────────────────────────────────────
+
+export function saveActiveSeriesId(id: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (id) localStorage.setItem(ACTIVE_SERIES_KEY, id);
+  else localStorage.removeItem(ACTIVE_SERIES_KEY);
+}
+
+export function loadActiveSeriesId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(ACTIVE_SERIES_KEY);
+}
+
 // ─── Novel ────────────────────────────────────────────────────────────────────
 
-export function loadNovels(): NovelRecord[] {
+export function loadAllNovels(): NovelRecord[] {
   if (typeof window === 'undefined') return [];
   try { return JSON.parse(localStorage.getItem(NOVEL_KEY) || '[]'); }
   catch { return []; }
 }
 
+export function loadNovels(seriesId?: string): NovelRecord[] {
+  const all = loadAllNovels();
+  return seriesId ? all.filter(n => n.seriesId === seriesId) : all;
+}
+
 export function saveNovel(novel: NovelRecord): void {
   if (typeof window === 'undefined') return;
-  const novels = loadNovels();
-  const idx = novels.findIndex(n => n.id === novel.id);
-  if (idx >= 0) novels[idx] = novel; else novels.unshift(novel);
-  localStorage.setItem(NOVEL_KEY, JSON.stringify(novels));
+  const all = loadAllNovels();
+  const idx = all.findIndex(n => n.id === novel.id);
+  if (idx >= 0) all[idx] = novel; else all.unshift(novel);
+  localStorage.setItem(NOVEL_KEY, JSON.stringify(all));
 }
 
 export function deleteNovel(id: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(NOVEL_KEY, JSON.stringify(loadNovels().filter(n => n.id !== id)));
+  localStorage.setItem(NOVEL_KEY, JSON.stringify(loadAllNovels().filter(n => n.id !== id)));
 }
 
 /** NovelViewer가 사용하는 객체 인터페이스 */
@@ -72,8 +128,10 @@ export const novelStorage = {
     config: NovelConfig;
     baseMood: string;
   }): NovelRecord {
+    const seriesId = config.seriesId ?? 'default';
     const record: NovelRecord = {
       id: generateId(),
+      seriesId,
       title,
       content,
       config,
@@ -81,60 +139,69 @@ export const novelStorage = {
       createdAt: Date.now(),
     };
     saveNovel(record);
+    incrementEpisodeCount(seriesId);
     return record;
   },
-  loadAll: loadNovels,
-  delete: deleteNovel,
+  loadAll: loadAllNovels,
+  delete:  deleteNovel,
 };
-
-// ─── Story Bible ──────────────────────────────────────────────────────────────
-
-export function saveStoryBible(entry: StoryBibleEntry): void {
-  if (typeof window === 'undefined') return;
-  const bibles = loadStoryBibles();
-  const idx = bibles.findIndex(b => b.novelId === entry.novelId);
-  if (idx >= 0) bibles[idx] = entry; else bibles.push(entry);
-  localStorage.setItem(BIBLE_KEY, JSON.stringify(bibles));
-}
-
-export function loadStoryBibles(): StoryBibleEntry[] {
-  if (typeof window === 'undefined') return [];
-  try { return JSON.parse(localStorage.getItem(BIBLE_KEY) || '[]'); }
-  catch { return []; }
-}
-
-export function deleteStoryBible(novelId: string): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(BIBLE_KEY, JSON.stringify(loadStoryBibles().filter(b => b.novelId !== novelId)));
-}
 
 // ─── World Bible ──────────────────────────────────────────────────────────────
 
-export function saveWorldBible(world: WorldBible): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(WORLD_KEY, JSON.stringify(world));
+export function loadAllWorldBibles(): WorldBible[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(WORLD_KEY) || '[]'); }
+  catch { return []; }
 }
 
-export function loadWorldBible(): WorldBible | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(WORLD_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+export function loadWorldBible(seriesId: string): WorldBible | null {
+  return loadAllWorldBibles().find(w => w.seriesId === seriesId) ?? null;
+}
+
+export function saveWorldBible(world: WorldBible): void {
+  if (typeof window === 'undefined') return;
+  const all = loadAllWorldBibles();
+  const idx = all.findIndex(w => w.seriesId === world.seriesId);
+  if (idx >= 0) all[idx] = world; else all.push(world);
+  localStorage.setItem(WORLD_KEY, JSON.stringify(all));
 }
 
 export function mergeCharactersIntoWorldBible(
-  newCharacters: Array<{ name: string; role: string; traits: string }>
+  seriesId: string,
+  newChars: Array<{ name: string; role: string; traits: string }>
 ): void {
-  const world = loadWorldBible();
+  const world = loadWorldBible(seriesId);
   if (!world) return;
-  for (const nc of newCharacters) {
+  for (const nc of newChars) {
     if (!world.characters.some(c => c.name === nc.name)) world.characters.push(nc);
   }
   saveWorldBible(world);
 }
 
+// ─── Story Bible ──────────────────────────────────────────────────────────────
+
+export function loadAllStoryBibles(): StoryBibleEntry[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(BIBLE_KEY) || '[]'); }
+  catch { return []; }
+}
+
+export function loadStoryBibles(seriesId: string): StoryBibleEntry[] {
+  return loadAllStoryBibles().filter(b => b.seriesId === seriesId);
+}
+
+export function saveStoryBible(entry: StoryBibleEntry): void {
+  if (typeof window === 'undefined') return;
+  const all = loadAllStoryBibles();
+  const idx = all.findIndex(b => b.novelId === entry.novelId);
+  if (idx >= 0) all[idx] = entry; else all.push(entry);
+  localStorage.setItem(BIBLE_KEY, JSON.stringify(all));
+}
+
+// ─── 전체 초기화 ──────────────────────────────────────────────────────────────
+
 export function clearAll(): void {
   if (typeof window === 'undefined') return;
-  [MOOD_KEY, NOVEL_KEY, BIBLE_KEY, WORLD_KEY].forEach(k => localStorage.removeItem(k));
+  [MOOD_KEY, NOVEL_KEY, BIBLE_KEY, WORLD_KEY, SERIES_KEY, ACTIVE_SERIES_KEY]
+    .forEach(k => localStorage.removeItem(k));
 }
