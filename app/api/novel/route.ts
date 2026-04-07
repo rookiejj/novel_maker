@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
               );
             }
           }
-          controller.enqueue(encoder.encode('event: done\ndata: {}\n\n'));
+          controller.enqueue(encoder.encode('event: done\n\n'));
         } catch {
-          controller.enqueue(encoder.encode('event: error\ndata: {}\n\n'));
+          controller.enqueue(encoder.encode('event: error\n\n'));
         } finally {
           controller.close();
         }
