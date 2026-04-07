@@ -1,7 +1,1 @@
-{
-  "functions": {
-    "api/novel/route": {
-      "maxDuration": 300
-    }
-  }
-}
+{}
