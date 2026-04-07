@@ -4,7 +4,6 @@ import { buildNovelPrompt } from '@/prompts/novelist';
 import type { GenerateNovelRequest } from '@/lib/types';
 import { NOVEL_LENGTH_MAP } from '@/lib/types';
 
-export const runtime    = 'nodejs';
 export const maxDuration = 300;
 
 type SSEEvent = 'chunk' | 'done' | 'error';
