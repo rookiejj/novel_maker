@@ -9,7 +9,6 @@ import NovelViewer from '@/components/novel/NovelViewer';
 import NovelCard from '@/components/novel/NovelCard';
 import NovelReadModal from '@/components/novel/NovelReadModal';
 import {
-  saveMood,
   loadMoodHistory,
   getTodayMood,
   saveNovel,
@@ -61,12 +60,13 @@ export default function HomePage() {
 
   // ─── 기분 선택 ───────────────────────────────────────────────────────────────
   function handleMoodSelect(emoji: MoodEmoji) {
+    // MoodSelector가 내부적으로 moodStorage.saveMood()를 이미 호출하므로
+    // 여기서는 state만 갱신한다.
     const entry: MoodEntry = {
       date: new Date().toISOString().slice(0, 10),
       emoji,
-      label: MOOD_MAP[emoji],
+      label: MOOD_MAP[emoji].label,
     };
-    saveMood(entry);
     setTodayMood(entry);
     setMoodHistory(loadMoodHistory());
   }
@@ -214,7 +214,7 @@ export default function HomePage() {
           <h2 className="text-sm font-semibold text-stone-400 uppercase tracking-widest mb-3">
             오늘의 기분
           </h2>
-          <MoodSelector selected={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
+          <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
           <MoodHistory history={moodHistory.slice(0, 7)} />
         </section>
 

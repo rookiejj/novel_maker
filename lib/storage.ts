@@ -1,11 +1,11 @@
-import { MoodEntry, SavedNovel, StoryBibleEntry, WorldBible } from './types';
+import { MoodEntry, MoodEmoji, MOOD_MAP, SavedNovel, StoryBibleEntry, WorldBible } from './types';
 
-const MOOD_KEY   = 'sagas_moods';
-const NOVEL_KEY  = 'sagas_novels';
-const BIBLE_KEY  = 'sagas_story_bibles';
-const WORLD_KEY  = 'sagas_world_bible'; // 단수 — 시리즈 전체에 하나만 존재
+const MOOD_KEY  = 'sagas_moods';
+const NOVEL_KEY = 'sagas_novels';
+const BIBLE_KEY = 'sagas_story_bibles';
+const WORLD_KEY = 'sagas_world_bible';
 
-// ─── Mood ─────────────────────────────────────────────────────────────────────
+// Mood
 
 export function saveMood(entry: MoodEntry): void {
   if (typeof window === 'undefined') return;
@@ -27,7 +27,21 @@ export function getTodayMood(): MoodEntry | null {
   return loadMoodHistory().find(e => e.date === today) ?? null;
 }
 
-// ─── Novel ────────────────────────────────────────────────────────────────────
+/** MoodSelector 컴포넌트가 사용하는 객체 인터페이스 호환용 */
+export const moodStorage = {
+  saveMood(emoji: MoodEmoji): void {
+    const entry: MoodEntry = {
+      date: new Date().toISOString().slice(0, 10),
+      emoji,
+      label: MOOD_MAP[emoji].label,
+    };
+    saveMood(entry);
+  },
+  getTodayMood,
+  loadMoodHistory,
+};
+
+// Novel
 
 export function saveNovel(novel: SavedNovel): void {
   if (typeof window === 'undefined') return;
@@ -49,7 +63,7 @@ export function deleteNovel(id: string): void {
   localStorage.setItem(NOVEL_KEY, JSON.stringify(loadNovels().filter(n => n.id !== id)));
 }
 
-// ─── Story Bible ──────────────────────────────────────────────────────────────
+// Story Bible
 
 export function saveStoryBible(entry: StoryBibleEntry): void {
   if (typeof window === 'undefined') return;
@@ -71,8 +85,7 @@ export function deleteStoryBible(novelId: string): void {
   localStorage.setItem(BIBLE_KEY, JSON.stringify(loadStoryBibles().filter(b => b.novelId !== novelId)));
 }
 
-// ─── World Bible ──────────────────────────────────────────────────────────────
-// 첫 소설 저장 시 한 번만 생성. 이후 인물 누적만 허용.
+// World Bible
 
 export function saveWorldBible(world: WorldBible): void {
   if (typeof window === 'undefined') return;

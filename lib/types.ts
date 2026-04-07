@@ -2,15 +2,18 @@
 
 export type MoodEmoji = '😊' | '😌' | '🤩' | '😰' | '😢' | '😴' | '😤' | '😑';
 
-export const MOOD_MAP: Record<MoodEmoji, string> = {
-  '😊': '행복해',
-  '😌': '평온해',
-  '🤩': '설레',
-  '😰': '불안해',
-  '😢': '슬퍼',
-  '😴': '피곤해',
-  '😤': '화나',
-  '😑': '무료해',
+/** 기존 코드 호환용 별칭 */
+export type MoodType = MoodEmoji;
+
+export const MOOD_MAP: Record<MoodEmoji, { emoji: string; label: string; tw: string }> = {
+  '😊': { emoji: '😊', label: '행복해',  tw: 'border-yellow-300 bg-yellow-50 text-yellow-700' },
+  '😌': { emoji: '😌', label: '평온해',  tw: 'border-green-300  bg-green-50  text-green-700'  },
+  '🤩': { emoji: '🤩', label: '설레',    tw: 'border-pink-300   bg-pink-50   text-pink-700'   },
+  '😰': { emoji: '😰', label: '불안해',  tw: 'border-blue-300   bg-blue-50   text-blue-700'   },
+  '😢': { emoji: '😢', label: '슬퍼',    tw: 'border-indigo-300 bg-indigo-50 text-indigo-700' },
+  '😴': { emoji: '😴', label: '피곤해',  tw: 'border-purple-300 bg-purple-50 text-purple-700' },
+  '😤': { emoji: '😤', label: '화나',    tw: 'border-red-300    bg-red-50    text-red-700'    },
+  '😑': { emoji: '😑', label: '무료해',  tw: 'border-stone-300  bg-stone-50  text-stone-500'  },
 };
 
 export interface MoodEntry {
