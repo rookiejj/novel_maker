@@ -2,11 +2,19 @@ import { NextRequest } from 'next/server';
 import { anthropic } from '@/lib/anthropic';
 import { buildSystemPrompt } from '@/prompts/novelist';
 import { NovelConfig, MoodRecord } from '@/lib/types';
+import { createClient } from '@/lib/supabase/server';
 
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 인증 가드 ─────────────────────────────────────────
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+
     const { config, recentMoods } = await req.json() as {
       config: NovelConfig;
       recentMoods: MoodRecord[];

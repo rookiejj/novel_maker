@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { anthropic } from '@/lib/anthropic';
 import { StoryBibleEntry, WorldBible, Genre } from '@/lib/types';
+import { createClient } from '@/lib/supabase/server';
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 인증 가드 ─────────────────────────────────────────
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const {
       novelId, seriesId, title, content,
       genre, date, mood, isFirstNovel, existingWorld,

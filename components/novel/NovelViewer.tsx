@@ -72,13 +72,23 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
       bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' });
   }, [raw, status]);
 
-  function handleSave() {
+  async function handleSave() {
     if (saved || !raw.trim()) return;
     const { title, body } = extractTitle(raw);
-    const record = novelStorage.save({ title, content: body, config, baseMood: baseMood?.mood ?? '😌' });
     setSaved(true);
-    onSaved(record);
-    setTimeout(() => onClose(), 700);
+    try {
+      const record = await novelStorage.save({
+        title,
+        content: body,
+        config,
+        baseMood: baseMood?.mood ?? '😌',
+      });
+      await onSaved(record);
+      setTimeout(() => onClose(), 700);
+    } catch (err) {
+      console.error('[NovelViewer] 저장 실패:', err);
+      setSaved(false);
+    }
   }
 
   const { title, body } = extractTitle(raw);
@@ -134,7 +144,6 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
           <span className="text-xs text-slate-400">{formatDate(Date.now())}</span>
           <div className="flex items-center gap-2">
-            {/* 취소하기 — 저장하지 않고 닫기 */}
             {!saved && (
               <button
                 onClick={onClose}

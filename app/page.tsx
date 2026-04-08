@@ -19,7 +19,7 @@ import {
 import {
   MoodEmoji, MoodEntry, MoodRecord,
   NovelConfig, NovelOptions, NovelRecord,
-  Series, SeriesLength, ProtagGender, SeriesLastOptions, WorldBible, StoryBibleEntry,
+  Series, SeriesLength, ProtagGender, WorldBible, StoryBibleEntry,
   MOOD_MAP, GENRE_MAP, WeatherType, WEATHER_MAP,
 } from '@/lib/types';
 import { generateId } from '@/lib/utils';
@@ -44,68 +44,71 @@ export default function HomePage() {
   const prevActiveSeriesRef = useRef<Series | null>(null);
 
   useEffect(() => {
-    // 기분 기본값: 행복해
-    const savedMood = getTodayMood();
-    if (savedMood) {
-      setTodayMood(savedMood);
-    } else {
-      const defaultMood: MoodEntry = {
-        date: new Date().toISOString().slice(0, 10),
-        emoji: '😊',
-        label: MOOD_MAP['😊'].label,
-      };
-      saveMood(defaultMood);
-      setTodayMood(defaultMood);
-    }
-    setMoodHistory(loadMoodHistory());
+    (async () => {
+      // 기분 기본값: 행복해
+      const savedMood = await getTodayMood();
+      if (savedMood) {
+        setTodayMood(savedMood);
+      } else {
+        const defaultMood: MoodEntry = {
+          date: new Date().toISOString().slice(0, 10),
+          emoji: '😊',
+          label: MOOD_MAP['😊'].label,
+        };
+        await saveMood(defaultMood);
+        setTodayMood(defaultMood);
+      }
+      setMoodHistory(await loadMoodHistory());
 
-    // 날씨 기본값: 맑음
-    const savedWeather = getTodayWeather();
-    if (savedWeather) {
-      setTodayWeather(savedWeather.weather);
-    } else {
-      saveWeather({ date: new Date().toISOString().slice(0, 10), weather: '맑음' });
-      setTodayWeather('맑음');
-    }
-    const series   = loadAllSeries();
-    const activeId = loadActiveSeriesId();
-    const active   = series.find(s => s.id === activeId) ?? series[0] ?? null;
-    setAllSeries(series);
-    setActiveSeries(active);
-    setNovels(active ? loadNovels(active.id) : []);
+      // 날씨 기본값: 맑음
+      const savedWeather = await getTodayWeather();
+      if (savedWeather) {
+        setTodayWeather(savedWeather.weather);
+      } else {
+        await saveWeather({ date: new Date().toISOString().slice(0, 10), weather: '맑음' });
+        setTodayWeather('맑음');
+      }
+
+      const series   = await loadAllSeries();
+      const activeId = await loadActiveSeriesId();
+      const active   = series.find(s => s.id === activeId) ?? series[0] ?? null;
+      setAllSeries(series);
+      setActiveSeries(active);
+      setNovels(active ? await loadNovels(active.id) : []);
+    })();
   }, []);
 
-  function handleMoodSelect(emoji: MoodEmoji) {
+  async function handleMoodSelect(emoji: MoodEmoji) {
     const entry: MoodEntry = {
       date: new Date().toISOString().slice(0, 10),
       emoji,
       label: MOOD_MAP[emoji].label,
     };
     setTodayMood(entry);
-    setMoodHistory(loadMoodHistory());
+    setMoodHistory(await loadMoodHistory());
   }
 
-  function switchSeries(series: Series) {
+  async function switchSeries(series: Series) {
     setActiveSeries(series);
-    saveActiveSeriesId(series.id);
-    setNovels(loadNovels(series.id));
+    await saveActiveSeriesId(series.id);
+    setNovels(await loadNovels(series.id));
     setShowSeriesPicker(false);
     setStep('home');
   }
 
-  function handleWizardComplete(options: NovelOptions) {
+  async function handleWizardComplete(options: NovelOptions) {
     let series = activeSeries;
 
     if (!series) {
       const newSeries: Series = {
-        id:              generateId(),
-        title:           `${options.genre} 연재`,
-        genre:           options.genre,
+        id:                generateId(),
+        title:             `${options.genre} 연재`,
+        genre:             options.genre,
         protagonistName:   options.protagonistName,
         protagonistGender: (options.protagonistGender as ProtagGender) ?? '중성',
         totalEpisodes:     (options.totalEpisodes as SeriesLength) ?? 20,
-        episodeCount:    0,
-        createdAt:       Date.now(),
+        episodeCount:      0,
+        createdAt:         Date.now(),
       };
       pendingNewSeriesRef.current = newSeries;
       setActiveSeries(newSeries);
@@ -114,25 +117,30 @@ export default function HomePage() {
     }
 
     const currentEpisode = series.episodeCount + 1;
+    const [worldBible, storyBibles] = await Promise.all([
+      loadWorldBible(series.id),
+      loadStoryBibles(series.id),
+    ]);
 
     setCurrentConfig({
       ...options,
-      seriesId:        series.id,
+      seriesId:          series.id,
       protagonistName:   series.protagonistName,
       protagonistGender: series.protagonistGender,
       weather:           todayWeather ?? undefined,
       totalEpisodes:     series.totalEpisodes,
       currentEpisode,
-      worldBible:      loadWorldBible(series.id) ?? null,
-      storyBibles:     loadStoryBibles(series.id) ?? [],
+      worldBible:        worldBible ?? null,
+      storyBibles:       storyBibles ?? [],
     });
     setStep('viewing');
   }
 
-  function handleViewerClose() {
+  async function handleViewerClose() {
     if (pendingNewSeriesRef.current) {
-      setActiveSeries(prevActiveSeriesRef.current);
-      setNovels(prevActiveSeriesRef.current ? loadNovels(prevActiveSeriesRef.current.id) : []);
+      const prev = prevActiveSeriesRef.current;
+      setActiveSeries(prev);
+      setNovels(prev ? await loadNovels(prev.id) : []);
       pendingNewSeriesRef.current = null;
     }
     setStep('home');
@@ -141,33 +149,32 @@ export default function HomePage() {
   async function handleNovelSaved(record: NovelRecord) {
     const seriesId = record.seriesId;
 
-    // 새 시리즈는 이 시점에 처음으로 storage에 저장
+    // 새 시리즈는 이 시점에 처음으로 DB에 저장
     if (pendingNewSeriesRef.current?.id === seriesId) {
-      saveSeries(pendingNewSeriesRef.current);
-      saveActiveSeriesId(seriesId);
+      await saveSeries(pendingNewSeriesRef.current);
+      await saveActiveSeriesId(seriesId);
       pendingNewSeriesRef.current = null;
     }
 
     // 시리즈 존재가 보장된 후 episode count 증가
-    incrementEpisodeCount(seriesId);
+    await incrementEpisodeCount(seriesId);
 
-    // 위저드 설정 저장 (다음 편 기본값으로 사용)
+    // 위저드 설정 저장
     if (record.config.atmosphere && record.config.style && record.config.length) {
-      updateSeriesLastOptions(seriesId, {
+      await updateSeriesLastOptions(seriesId, {
         atmosphere: record.config.atmosphere,
         style:      record.config.style,
         length:     record.config.length,
       });
     }
 
-    // series state 갱신 (episodeCount 포함)
-    const freshSeries = loadAllSeries();
+    // series state 갱신
+    const freshSeries = await loadAllSeries();
     setAllSeries(freshSeries);
     setActiveSeries(freshSeries.find(s => s.id === seriesId) ?? null);
+    setNovels(await loadNovels(seriesId));
 
-    setNovels(loadNovels(seriesId));
-
-    const worldBible   = loadWorldBible(seriesId);
+    const worldBible   = await loadWorldBible(seriesId);
     const isFirstNovel = !worldBible;
     const date         = new Date().toISOString().slice(0, 10);
     const moodLabel    = todayMood ? MOOD_MAP[todayMood.emoji].label : '';
@@ -191,17 +198,17 @@ export default function HomePage() {
             newCharacterProfiles: WorldBible['characters']; suggestedSeriesTitle: string | null;
           };
 
-        saveStoryBible(storyBible);
+        await saveStoryBible(storyBible);
         if (isFirstNovel && newWB) {
-          saveWorldBible(newWB);
+          await saveWorldBible(newWB);
           if (suggestedSeriesTitle) {
-            updateSeriesTitle(seriesId, suggestedSeriesTitle);
-            const updated = loadAllSeries();
+            await updateSeriesTitle(seriesId, suggestedSeriesTitle);
+            const updated = await loadAllSeries();
             setAllSeries(updated);
             setActiveSeries(updated.find(s => s.id === seriesId) ?? null);
           }
         } else if (!isFirstNovel && newCharacterProfiles?.length > 0) {
-          mergeCharactersIntoWorldBible(seriesId, newCharacterProfiles);
+          await mergeCharactersIntoWorldBible(seriesId, newCharacterProfiles);
         }
       }
     } catch (err) {
@@ -209,9 +216,9 @@ export default function HomePage() {
     }
   }
 
-  function handleDelete(id: string) {
-    deleteNovel(id);
-    if (activeSeries) setNovels(loadNovels(activeSeries.id));
+  async function handleDelete(id: string) {
+    await deleteNovel(id);
+    if (activeSeries) setNovels(await loadNovels(activeSeries.id));
   }
 
   const recentMoods: MoodRecord[] = moodHistory
@@ -219,8 +226,7 @@ export default function HomePage() {
   const baseMood: MoodRecord | null = todayMood
     ? { id: '0', date: todayMood.date, mood: todayMood.emoji } : null;
 
-
-  // 조사 자동 처리 (받침 있으면 이, 없으면 가)
+  // 조사 자동 처리
   function hasEndConsonant(word: string): boolean {
     const code = word.charCodeAt(word.length - 1) - 0xAC00;
     return code >= 0 && code % 28 !== 0;
@@ -243,7 +249,7 @@ export default function HomePage() {
 
       <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
 
-        {/* ── 1. 기분 (최상단, 컴팩트) ─────────────────────────── */}
+        {/* ── 1. 기분 + 날씨 ───────────────────────────────── */}
         <section className="space-y-1">
           <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
           <div className="mt-4">
@@ -260,7 +266,7 @@ export default function HomePage() {
           <div className="flex-1 h-px bg-brand-100" />
         </div>
 
-        {/* ── 2. 시리즈 + 생성 ─────────────────────────────────── */}
+        {/* ── 2. 시리즈 + 생성 ─────────────────────────────── */}
         {step === 'home' && (
           <section className="space-y-3">
             <div className="flex gap-2">
@@ -275,9 +281,14 @@ export default function HomePage() {
                 </button>
               )}
               <button
-                onClick={() => { prevActiveSeriesRef.current = activeSeries; setActiveSeries(null); setNovels([]); setStep('wizard'); }}
+                onClick={() => {
+                  prevActiveSeriesRef.current = activeSeries;
+                  setActiveSeries(null);
+                  setNovels([]);
+                  setStep('wizard');
+                }}
                 className="flex-1 py-2.5 rounded-2xl border border-brand-200 bg-white
-                           text-brand-600 text-sm font-semibold hover:bg-brand-50 transition-colors" 
+                           text-brand-600 text-sm font-semibold hover:bg-brand-50 transition-colors"
               >
                 + 새 시리즈
               </button>
@@ -299,7 +310,6 @@ export default function HomePage() {
                       </p>
                     </div>
                   </div>
-                  {/* 진행 상태 배지 */}
                   {activeSeries.episodeCount >= activeSeries.totalEpisodes ? (
                     <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50
                                      px-2.5 py-1 rounded-full border border-emerald-100">완결</span>
@@ -309,7 +319,6 @@ export default function HomePage() {
                   )}
                 </div>
 
-                {/* 진행 바 */}
                 <div className="space-y-1">
                   <div className="h-1.5 w-full rounded-full bg-brand-50 overflow-hidden">
                     <div
@@ -332,7 +341,6 @@ export default function HomePage() {
                     ? '완결된 시리즈입니다'
                     : '다음 이야기 이어 쓰기'}
                 </button>
-
               </div>
             ) : (
               <div className="rounded-2xl border-2 border-dashed border-brand-200 p-8 text-center">
@@ -342,7 +350,7 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* ── 위저드 ───────────────────────────────────────────── */}
+        {/* ── 위저드 ───────────────────────────────────────── */}
         {step === 'wizard' && (
           <NovelWizard
             lockedGenre={activeSeries?.genre}
@@ -355,7 +363,7 @@ export default function HomePage() {
           />
         )}
 
-        {/* ── NovelViewer ──────────────────────────────────────── */}
+        {/* ── NovelViewer ──────────────────────────────────── */}
         {step === 'viewing' && currentConfig && (
           <NovelViewer
             config={currentConfig}
@@ -366,7 +374,7 @@ export default function HomePage() {
           />
         )}
 
-        {/* ── 지난 이야기 ──────────────────────────────────────── */}
+        {/* ── 지난 이야기 ──────────────────────────────────── */}
         {novels.length > 0 && (
           <section>
             <h2 className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest mb-3">
