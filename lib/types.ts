@@ -1,3 +1,22 @@
+// ─── Weather ──────────────────────────────────────────────────────────────────
+
+export type WeatherType = '맑음' | '흐림' | '비' | '눈' | '바람' | '안개' | '폭풍';
+
+export const WEATHER_MAP: Record<WeatherType, { emoji: string; label: string; effect: string }> = {
+  '맑음': { emoji: '☀️', label: '맑음', effect: '따스한 햇살, 밝고 선명한 색채, 기분 좋은 온기' },
+  '흐림': { emoji: '☁️', label: '흐림', effect: '무거운 회색 하늘, 차분하고 눅눅한 공기' },
+  '비':   { emoji: '🌧️', label: '비',   effect: '빗소리, 창문의 물방울, 젖은 아스팔트 냄새, 축축한 공기' },
+  '눈':   { emoji: '❄️', label: '눈',   effect: '하얀 고요함, 뽀드득 발자국 소리, 차가운 숨결, 눈꽃' },
+  '바람': { emoji: '💨', label: '바람', effect: '흔들리는 나뭇가지, 날리는 머리카락, 귓가를 스치는 소리' },
+  '안개': { emoji: '🌫️', label: '안개', effect: '흐릿한 윤곽, 신비로운 분위기, 손에 잡힐 듯한 서늘함' },
+  '폭풍': { emoji: '⛈️', label: '폭풍', effect: '긴장감, 천둥소리, 번쩍이는 빛, 거센 빗줄기' },
+};
+
+export interface WeatherEntry {
+  date: string; // YYYY-MM-DD
+  weather: WeatherType;
+}
+
 // ─── Mood ────────────────────────────────────────────────────────────────────
 
 export type MoodEmoji = '😊' | '😌' | '🤩' | '😰' | '😢' | '😴' | '😤' | '😑';
@@ -75,6 +94,7 @@ export interface NovelConfig {
   seriesId?: string;
   protagonistName?: string;
   protagonistGender?: ProtagGender;
+  weather?: WeatherType;
   totalEpisodes?: SeriesLength;  // 시리즈 총 편수
   currentEpisode?: number;       // 이번 편 번호 (1-based)
   worldBible?: WorldBible | null;

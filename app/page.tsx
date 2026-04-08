@@ -13,6 +13,7 @@ import {
   getTodayMood, loadMoodHistory,
   loadNovels, deleteNovel,
   loadAllSeries, saveSeries, saveActiveSeriesId, loadActiveSeriesId, incrementEpisodeCount,
+  getTodayWeather,
   loadWorldBible, saveWorldBible, mergeCharactersIntoWorldBible,
   loadStoryBibles, saveStoryBible, updateSeriesTitle,
 } from '@/lib/storage';
@@ -20,10 +21,11 @@ import {
   MoodEmoji, MoodEntry, MoodRecord,
   NovelConfig, NovelOptions, NovelRecord,
   Series, SeriesLength, ProtagGender, WorldBible, StoryBibleEntry,
-  MOOD_MAP, GENRE_MAP,
+  MOOD_MAP, GENRE_MAP, WeatherType, WEATHER_MAP,
 } from '@/lib/types';
 import { generateId } from '@/lib/utils';
 import TwEmoji from '@/components/ui/TwEmoji';
+import WeatherSelector from '@/components/weather/WeatherSelector';
 
 type Step = 'home' | 'wizard' | 'viewing';
 
@@ -37,6 +39,7 @@ export default function HomePage() {
   const [currentConfig,    setCurrentConfig]    = useState<NovelConfig | null>(null);
   const [novels,           setNovels]           = useState<NovelRecord[]>([]);
   const [readingNovel,     setReadingNovel]     = useState<NovelRecord | null>(null);
+  const [todayWeather,     setTodayWeather]     = useState<WeatherType | null>(null);
 
   const pendingNewSeriesRef = useRef<Series | null>(null);
   const prevActiveSeriesRef = useRef<Series | null>(null);
@@ -44,6 +47,7 @@ export default function HomePage() {
   useEffect(() => {
     setTodayMood(getTodayMood());
     setMoodHistory(loadMoodHistory());
+    setTodayWeather(getTodayWeather()?.weather ?? null);
     const series   = loadAllSeries();
     const activeId = loadActiveSeriesId();
     const active   = series.find(s => s.id === activeId) ?? series[0] ?? null;
@@ -97,6 +101,7 @@ export default function HomePage() {
       seriesId:        series.id,
       protagonistName:   series.protagonistName,
       protagonistGender: series.protagonistGender,
+      weather:           todayWeather ?? undefined,
       totalEpisodes:     series.totalEpisodes,
       currentEpisode,
       worldBible:      loadWorldBible(series.id) ?? null,
@@ -196,10 +201,13 @@ export default function HomePage() {
         <section className="space-y-1">
           <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
           <MoodHistory records={recentMoods} />
-          {todayMood && (
+          <WeatherSelector todayWeather={todayWeather} onSelect={setTodayWeather} />
+          {(todayMood || todayWeather) && (
             <p className="text-[11px] text-center text-brand-400 pt-0.5">
-              <TwEmoji emoji={MOOD_MAP[todayMood.emoji].emoji} size={11} className="mr-0.5 align-middle" />
-              <strong>"{MOOD_MAP[todayMood.emoji].label}"</strong> 기분이 이야기에 반영됩니다
+              {todayMood && <><TwEmoji emoji={MOOD_MAP[todayMood.emoji].emoji} size={11} className="mr-0.5 align-middle" /><strong>"{MOOD_MAP[todayMood.emoji].label}"</strong> 기분</>}
+              {todayMood && todayWeather && <span className="mx-1">·</span>}
+              {todayWeather && <><TwEmoji emoji={WEATHER_MAP[todayWeather].emoji} size={11} className="mr-0.5 align-middle" /><strong>{WEATHER_MAP[todayWeather].label}</strong> 날씨</>}
+              {(todayMood || todayWeather) && <span>가 이야기에 반영됩니다</span>}
             </p>
           )}
         </section>

@@ -1,11 +1,13 @@
 import {
   MoodEntry, MoodEmoji, MOOD_MAP,
+  WeatherEntry, WeatherType,
   NovelRecord, NovelConfig,
   Series, WorldBible, StoryBibleEntry,
   Genre,
 } from './types';
 import { generateId } from './utils';
 
+const WEATHER_KEY = 'sagas_weather';
 const MOOD_KEY          = 'sagas_moods';
 const NOVEL_KEY         = 'sagas_novels';
 const BIBLE_KEY         = 'sagas_story_bibles';
@@ -45,6 +47,28 @@ export const moodStorage = {
   getTodayMood,
   loadMoodHistory,
 };
+
+
+// ─── Weather ──────────────────────────────────────────────────────────────────
+
+export function saveWeather(entry: WeatherEntry): void {
+  if (typeof window === 'undefined') return;
+  const history = loadWeatherHistory();
+  const idx = history.findIndex(e => e.date === entry.date);
+  if (idx >= 0) history[idx] = entry; else history.unshift(entry);
+  localStorage.setItem(WEATHER_KEY, JSON.stringify(history.slice(0, 30)));
+}
+
+export function loadWeatherHistory(): WeatherEntry[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(WEATHER_KEY) || '[]'); }
+  catch { return []; }
+}
+
+export function getTodayWeather(): WeatherEntry | null {
+  const today = new Date().toISOString().slice(0, 10);
+  return loadWeatherHistory().find(e => e.date === today) ?? null;
+}
 
 // ─── Series ───────────────────────────────────────────────────────────────────
 
