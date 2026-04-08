@@ -64,10 +64,7 @@ export async function POST(req: NextRequest) {
       storyBible,
       worldBible,
       newCharacterProfiles: parsed.newCharacterProfiles ?? [],
-      // 시리즈 제목 자동 생성용 — worldSetting 첫 문장 요약
-      suggestedSeriesTitle: isFirstNovel
-        ? ((parsed.worldSetting as string) ?? '').split('.')[0].slice(0, 20) || null
-        : null,
+      suggestedSeriesTitle: isFirstNovel ? ((parsed.seriesTitle as string) || null) : null,
     });
   } catch (err) {
     console.error('[/api/summarize]', err);
@@ -80,6 +77,7 @@ function buildFirstNovelPrompt(): string {
 주어진 소설을 분석해 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
 
 {
+  "seriesTitle": "이 이야기 시리즈의 제목 (10자 이내, 자연스럽고 시적인 한국어, 문장 중간에 끊기지 않게)",
   "worldSetting": "주요 배경 한 줄 (장소 + 시대/분위기)",
   "characters": [
     { "name": "이름", "role": "주인공|조력자|라이벌|기타", "traits": "성격·외모·직업 핵심 특징 한 줄" }
