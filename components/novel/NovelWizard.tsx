@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender } from '@/lib/types';
+import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender, SeriesLastOptions } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
 
 const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사'];
@@ -19,17 +19,18 @@ interface Props {
   lockedProtagonistName?: string;
   lockedTotalEpisodes?:   SeriesLength;
   lockedGender?:          ProtagGender;
+  lastOptions?:           SeriesLastOptions; // 직전 설정 (기존 연재)
   onGenerate: (options: NovelOptions) => void;
   onCancel:   () => void;
 }
 
 export default function NovelWizard({
-  lockedGenre, lockedProtagonistName, lockedGender, lockedTotalEpisodes, onGenerate, onCancel,
+  lockedGenre, lockedProtagonistName, lockedGender, lockedTotalEpisodes, lastOptions, onGenerate, onCancel,
 }: Props) {
   const [genre,           setGenre]           = useState<Genre>(lockedGenre ?? '일상');
-  const [atmosphere,      setAtmosphere]      = useState<Atmosphere>('잔잔한');
-  const [style,           setStyle]           = useState<WritingStyle>('서정적 문체');
-  const [length,          setLength]          = useState<NovelLength>('중편 (1500자)');
+  const [atmosphere,      setAtmosphere]      = useState<Atmosphere>(lastOptions?.atmosphere ?? '잔잔한');
+  const [style,           setStyle]           = useState<WritingStyle>(lastOptions?.style ?? '서정적 문체');
+  const [length,          setLength]          = useState<NovelLength>(lastOptions?.length ?? '중편 (1500자)');
   const [protagonistName, setProtagonistName] = useState('');
   const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(20);
   const [gender,          setGender]          = useState<ProtagGender | null>('중성');

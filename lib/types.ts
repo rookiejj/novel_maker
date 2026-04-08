@@ -117,14 +117,21 @@ export type SavedNovel = NovelRecord;
 
 // ─── Series ───────────────────────────────────────────────────────────────────
 
+export interface SeriesLastOptions {
+  atmosphere: Atmosphere;
+  style:      WritingStyle;
+  length:     NovelLength;
+}
+
 export interface Series {
   id: string;
   title: string;
   genre: Genre;
   protagonistName?: string;
-  protagonistGender: ProtagGender;  // 필수
-  totalEpisodes: SeriesLength;   // 총 편수 (한 번 설정 후 고정)
+  protagonistGender: ProtagGender;
+  totalEpisodes: SeriesLength;
   episodeCount: number;
+  lastOptions?: SeriesLastOptions;  // 직전 위저드 설정 (다음 편에 기본값으로 사용)
   createdAt: number;
 }
 

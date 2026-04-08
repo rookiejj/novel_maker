@@ -98,6 +98,13 @@ export function incrementEpisodeCount(seriesId: string): void {
   if (s) { s.episodeCount += 1; localStorage.setItem(SERIES_KEY, JSON.stringify(all)); }
 }
 
+/** 직전 위저드 설정을 시리즈에 저장 */
+export function updateSeriesLastOptions(seriesId: string, options: import('./types').SeriesLastOptions): void {
+  const all = loadAllSeries();
+  const s = all.find(s => s.id === seriesId);
+  if (s) { s.lastOptions = options; localStorage.setItem(SERIES_KEY, JSON.stringify(all)); }
+}
+
 /** 시리즈 제목을 worldSetting 기반으로 업데이트 */
 export function updateSeriesTitle(seriesId: string, title: string): void {
   const all = loadAllSeries();

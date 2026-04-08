@@ -12,14 +12,14 @@ import {
   getTodayMood, loadMoodHistory, saveMood,
   loadNovels, deleteNovel,
   loadAllSeries, saveSeries, saveActiveSeriesId, loadActiveSeriesId, incrementEpisodeCount,
-  getTodayWeather, saveWeather,
+  getTodayWeather, saveWeather, updateSeriesLastOptions,
   loadWorldBible, saveWorldBible, mergeCharactersIntoWorldBible,
   loadStoryBibles, saveStoryBible, updateSeriesTitle,
 } from '@/lib/storage';
 import {
   MoodEmoji, MoodEntry, MoodRecord,
   NovelConfig, NovelOptions, NovelRecord,
-  Series, SeriesLength, ProtagGender, WorldBible, StoryBibleEntry,
+  Series, SeriesLength, ProtagGender, SeriesLastOptions, WorldBible, StoryBibleEntry,
   MOOD_MAP, GENRE_MAP, WeatherType, WEATHER_MAP,
 } from '@/lib/types';
 import { generateId } from '@/lib/utils';
@@ -150,6 +150,15 @@ export default function HomePage() {
 
     // 시리즈 존재가 보장된 후 episode count 증가
     incrementEpisodeCount(seriesId);
+
+    // 위저드 설정 저장 (다음 편 기본값으로 사용)
+    if (record.config.atmosphere && record.config.style && record.config.length) {
+      updateSeriesLastOptions(seriesId, {
+        atmosphere: record.config.atmosphere,
+        style:      record.config.style,
+        length:     record.config.length,
+      });
+    }
 
     // series state 갱신 (episodeCount 포함)
     const freshSeries = loadAllSeries();
@@ -340,6 +349,7 @@ export default function HomePage() {
             lockedProtagonistName={activeSeries?.protagonistName}
             lockedGender={activeSeries?.protagonistGender}
             lockedTotalEpisodes={activeSeries?.totalEpisodes}
+            lastOptions={activeSeries?.lastOptions}
             onGenerate={handleWizardComplete}
             onCancel={() => setStep('home')}
           />
