@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Header from '@/components/layout/Header';
 import MoodSelector from '@/components/mood/MoodSelector';
-import MoodHistory from '@/components/mood/MoodHistory';
 import NovelWizard from '@/components/novel/NovelWizard';
 import NovelViewer from '@/components/novel/NovelViewer';
 import NovelCard from '@/components/novel/NovelCard';
@@ -191,6 +190,24 @@ export default function HomePage() {
   const baseMood: MoodRecord | null = todayMood
     ? { id: '0', date: todayMood.date, mood: todayMood.emoji } : null;
 
+
+  // 조사 자동 처리 (받침 있으면 이, 없으면 가)
+  function hasEndConsonant(word: string): boolean {
+    const code = word.charCodeAt(word.length - 1) - 0xAC00;
+    return code >= 0 && code % 28 !== 0;
+  }
+  const contextHint = (() => {
+    const parts: string[] = [];
+    if (todayMood)    parts.push(`"${MOOD_MAP[todayMood.emoji].label}" 기분`);
+    if (todayWeather) parts.push(`"${WEATHER_MAP[todayWeather].label}" 날씨`);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) {
+      const lastWord = todayMood ? '기분' : '날씨';
+      return parts[0] + (hasEndConsonant(lastWord) ? '이' : '가') + ' 이야기에 반영됩니다';
+    }
+    return `${parts[0]}과 ${parts[1]}가 이야기에 반영됩니다`;
+  })();
+
   return (
     <div className="min-h-screen bg-[#F0EEFF] text-slate-900">
       <Header />
@@ -200,15 +217,11 @@ export default function HomePage() {
         {/* ── 1. 기분 (최상단, 컴팩트) ─────────────────────────── */}
         <section className="space-y-1">
           <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
-          <MoodHistory records={recentMoods} />
-          <WeatherSelector todayWeather={todayWeather} onSelect={setTodayWeather} />
-          {(todayMood || todayWeather) && (
-            <p className="text-[11px] text-center text-brand-400 pt-0.5">
-              {todayMood && <><TwEmoji emoji={MOOD_MAP[todayMood.emoji].emoji} size={11} className="mr-0.5 align-middle" /><strong>"{MOOD_MAP[todayMood.emoji].label}"</strong> 기분</>}
-              {todayMood && todayWeather && <span className="mx-1">·</span>}
-              {todayWeather && <><TwEmoji emoji={WEATHER_MAP[todayWeather].emoji} size={11} className="mr-0.5 align-middle" /><strong>{WEATHER_MAP[todayWeather].label}</strong> 날씨</>}
-              {(todayMood || todayWeather) && <span>가 이야기에 반영됩니다</span>}
-            </p>
+          <div className="mt-4">
+            <WeatherSelector todayWeather={todayWeather} onSelect={setTodayWeather} />
+          </div>
+          {contextHint && (
+            <p className="text-[11px] text-center text-brand-400 pt-1">{contextHint}</p>
           )}
         </section>
 
@@ -233,7 +246,7 @@ export default function HomePage() {
                 </button>
               )}
               <button
-                disabled={!todayMood}
+                disabled={!todayMood || !todayWeather}
                 onClick={() => { prevActiveSeriesRef.current = activeSeries; setActiveSeries(null); setNovels([]); setStep('wizard'); }}
                 className="flex-1 py-2.5 rounded-2xl border border-brand-200 bg-white
                            text-brand-600 text-sm font-semibold
@@ -283,7 +296,7 @@ export default function HomePage() {
                 </div>
 
                 <button
-                  disabled={!todayMood || activeSeries.episodeCount >= activeSeries.totalEpisodes}
+                  disabled={!todayMood || !todayWeather || activeSeries.episodeCount >= activeSeries.totalEpisodes}
                   onClick={() => setStep('wizard')}
                   className="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold
                              disabled:opacity-40 hover:bg-brand-700 transition-colors shadow-sm"
@@ -292,8 +305,10 @@ export default function HomePage() {
                     ? '완결된 시리즈입니다'
                     : '다음 이야기 이어 쓰기'}
                 </button>
-                {!todayMood && (
-                  <p className="text-xs text-center text-slate-400">기분을 먼저 기록해주세요</p>
+                {(!todayMood || !todayWeather) && (
+                  <p className="text-xs text-center text-slate-400">
+                    {!todayMood ? '기분을' : '날씨를'} 먼저 기록해주세요
+                  </p>
                 )}
               </div>
             ) : (
