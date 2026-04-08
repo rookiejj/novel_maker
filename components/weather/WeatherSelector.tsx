@@ -17,7 +17,7 @@ export default function WeatherSelector({ todayWeather, onSelect }: Props) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 pt-3">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest">
           오늘의 날씨
