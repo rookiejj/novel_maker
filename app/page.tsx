@@ -9,10 +9,10 @@ import NovelCard from '@/components/novel/NovelCard';
 import NovelReadModal from '@/components/novel/NovelReadModal';
 import SeriesPickerModal from '@/components/novel/SeriesPickerModal';
 import {
-  getTodayMood, loadMoodHistory,
+  getTodayMood, loadMoodHistory, saveMood,
   loadNovels, deleteNovel,
   loadAllSeries, saveSeries, saveActiveSeriesId, loadActiveSeriesId, incrementEpisodeCount,
-  getTodayWeather,
+  getTodayWeather, saveWeather,
   loadWorldBible, saveWorldBible, mergeCharactersIntoWorldBible,
   loadStoryBibles, saveStoryBible, updateSeriesTitle,
 } from '@/lib/storage';
@@ -44,9 +44,29 @@ export default function HomePage() {
   const prevActiveSeriesRef = useRef<Series | null>(null);
 
   useEffect(() => {
-    setTodayMood(getTodayMood());
+    // 기분 기본값: 행복해
+    const savedMood = getTodayMood();
+    if (savedMood) {
+      setTodayMood(savedMood);
+    } else {
+      const defaultMood: MoodEntry = {
+        date: new Date().toISOString().slice(0, 10),
+        emoji: '😊',
+        label: MOOD_MAP['😊'].label,
+      };
+      saveMood(defaultMood);
+      setTodayMood(defaultMood);
+    }
     setMoodHistory(loadMoodHistory());
-    setTodayWeather(getTodayWeather()?.weather ?? null);
+
+    // 날씨 기본값: 맑음
+    const savedWeather = getTodayWeather();
+    if (savedWeather) {
+      setTodayWeather(savedWeather.weather);
+    } else {
+      saveWeather({ date: new Date().toISOString().slice(0, 10), weather: '맑음' });
+      setTodayWeather('맑음');
+    }
     const series   = loadAllSeries();
     const activeId = loadActiveSeriesId();
     const active   = series.find(s => s.id === activeId) ?? series[0] ?? null;
@@ -246,11 +266,9 @@ export default function HomePage() {
                 </button>
               )}
               <button
-                disabled={!todayMood || !todayWeather}
                 onClick={() => { prevActiveSeriesRef.current = activeSeries; setActiveSeries(null); setNovels([]); setStep('wizard'); }}
                 className="flex-1 py-2.5 rounded-2xl border border-brand-200 bg-white
-                           text-brand-600 text-sm font-semibold
-                           disabled:opacity-40 hover:bg-brand-50 transition-colors"
+                           text-brand-600 text-sm font-semibold hover:bg-brand-50 transition-colors" 
               >
                 + 새 시리즈
               </button>
@@ -296,20 +314,16 @@ export default function HomePage() {
                 </div>
 
                 <button
-                  disabled={!todayMood || !todayWeather || activeSeries.episodeCount >= activeSeries.totalEpisodes}
-                  onClick={() => setStep('wizard')}
-                  className="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold
-                             disabled:opacity-40 hover:bg-brand-700 transition-colors shadow-sm"
+                  onClick={() => { if (activeSeries.episodeCount < activeSeries.totalEpisodes) setStep('wizard'); }}
+                  className={`w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold
+                             hover:bg-brand-700 transition-colors shadow-sm
+                             ${activeSeries.episodeCount >= activeSeries.totalEpisodes ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   {activeSeries.episodeCount >= activeSeries.totalEpisodes
                     ? '완결된 시리즈입니다'
                     : '다음 이야기 이어 쓰기'}
                 </button>
-                {(!todayMood || !todayWeather) && (
-                  <p className="text-xs text-center text-slate-400">
-                    {!todayMood ? '기분을' : '날씨를'} 먼저 기록해주세요
-                  </p>
-                )}
+
               </div>
             ) : (
               <div className="rounded-2xl border-2 border-dashed border-brand-200 p-8 text-center">

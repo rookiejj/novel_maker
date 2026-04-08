@@ -32,7 +32,7 @@ export default function NovelWizard({
   const [length,          setLength]          = useState<NovelLength>('중편 (1500자)');
   const [protagonistName, setProtagonistName] = useState('');
   const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(20);
-  const [gender,          setGender]          = useState<ProtagGender | null>(null);
+  const [gender,          setGender]          = useState<ProtagGender | null>('중성');
 
   const isNewSeries = !lockedGenre;
 
@@ -198,7 +198,6 @@ export default function NovelWizard({
           취소
         </button>
         <button
-          disabled={isNewSeries && !gender}
           onClick={() => {
             if (isNewSeries && !gender) return;
             onGenerate({
