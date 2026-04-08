@@ -71,7 +71,6 @@ export default function HomePage() {
   }
 
   function handleWizardComplete(options: NovelOptions) {
-    prevActiveSeriesRef.current = activeSeries;
     let series = activeSeries;
 
     if (!series) {
@@ -220,7 +219,7 @@ export default function HomePage() {
               )}
               <button
                 disabled={!todayMood}
-                onClick={() => { setActiveSeries(null); setNovels([]); setStep('wizard'); }}
+                onClick={() => { prevActiveSeriesRef.current = activeSeries; setActiveSeries(null); setNovels([]); setStep('wizard'); }}
                 className="flex-1 py-2.5 rounded-2xl border border-brand-200 bg-white
                            text-brand-600 text-sm font-semibold
                            disabled:opacity-40 hover:bg-brand-50 transition-colors"
