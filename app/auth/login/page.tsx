@@ -108,7 +108,7 @@ export default function LoginPage() {
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
-        onReady={initializeGsi}
+        onReady={() => { initializeGsi(); }}
       />
       <div className="w-full max-w-sm space-y-8 text-center">
         <div>
