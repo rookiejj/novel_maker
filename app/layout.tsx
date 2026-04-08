@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '서사 — 나만의 이야기',
-  description: '매일의 감정이 담긴 단편 소설',
+  title: '한편',
+  description: '아무도 읽지 않는 이야기를 씁니다',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
