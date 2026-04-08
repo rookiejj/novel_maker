@@ -7,10 +7,14 @@ import {
 } from '../types';
 import { generateId } from '../utils';
 
-const supabase = createClient();
+let _supabase: ReturnType<typeof createClient> | null = null;
+function getSupabase() {
+  if (!_supabase) _supabase = createClient();
+  return _supabase;
+}
 
 async function uid(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser();
+  const { data } = await getSupabase().auth.getUser();
   return data.user?.id ?? null;
 }
 
@@ -18,7 +22,7 @@ async function uid(): Promise<string | null> {
 
 export async function saveMood(entry: MoodEntry): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('mood_records').upsert(
+  await getSupabase().from('mood_records').upsert(
     {
       id: generateId(),
       user_id,
@@ -32,7 +36,7 @@ export async function saveMood(entry: MoodEntry): Promise<void> {
 
 export async function loadMoodHistory(): Promise<MoodEntry[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('mood_records').select('date, emoji, label')
     .eq('user_id', user_id)
     .order('date', { ascending: false })
@@ -47,7 +51,7 @@ export async function loadMoodHistory(): Promise<MoodEntry[]> {
 export async function getTodayMood(): Promise<MoodEntry | null> {
   const user_id = await uid(); if (!user_id) return null;
   const today = new Date().toISOString().slice(0, 10);
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('mood_records').select('date, emoji, label')
     .eq('user_id', user_id).eq('date', today).maybeSingle();
   if (!data) return null;
@@ -62,7 +66,7 @@ export async function getTodayMood(): Promise<MoodEntry | null> {
 
 export async function saveWeather(entry: WeatherEntry): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('weather_records').upsert(
+  await getSupabase().from('weather_records').upsert(
     {
       id: generateId(),
       user_id,
@@ -75,7 +79,7 @@ export async function saveWeather(entry: WeatherEntry): Promise<void> {
 
 export async function loadWeatherHistory(): Promise<WeatherEntry[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('weather_records').select('date, weather')
     .eq('user_id', user_id)
     .order('date', { ascending: false })
@@ -89,7 +93,7 @@ export async function loadWeatherHistory(): Promise<WeatherEntry[]> {
 export async function getTodayWeather(): Promise<WeatherEntry | null> {
   const user_id = await uid(); if (!user_id) return null;
   const today = new Date().toISOString().slice(0, 10);
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('weather_records').select('date, weather')
     .eq('user_id', user_id).eq('date', today).maybeSingle();
   if (!data) return null;
@@ -117,7 +121,7 @@ function rowToSeries(r: Record<string, unknown>): Series {
 
 export async function loadAllSeries(): Promise<Series[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('series').select('*')
     .eq('user_id', user_id)
     .order('created_at', { ascending: false });
@@ -126,7 +130,7 @@ export async function loadAllSeries(): Promise<Series[]> {
 
 export async function saveSeries(series: Series): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('series').upsert({
+  await getSupabase().from('series').upsert({
     id:                 series.id,
     user_id,
     title:              series.title,
@@ -142,16 +146,16 @@ export async function saveSeries(series: Series): Promise<void> {
 
 export async function deleteSeries(id: string): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('series').delete().eq('id', id).eq('user_id', user_id);
+  await getSupabase().from('series').delete().eq('id', id).eq('user_id', user_id);
 }
 
 export async function incrementEpisodeCount(seriesId: string): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('series').select('episode_count')
     .eq('id', seriesId).eq('user_id', user_id).maybeSingle();
   if (!data) return;
-  await supabase.from('series')
+  await getSupabase().from('series')
     .update({ episode_count: ((data.episode_count as number) ?? 0) + 1 })
     .eq('id', seriesId).eq('user_id', user_id);
 }
@@ -160,14 +164,14 @@ export async function updateSeriesLastOptions(
   seriesId: string, options: SeriesLastOptions
 ): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('series')
+  await getSupabase().from('series')
     .update({ last_options: options })
     .eq('id', seriesId).eq('user_id', user_id);
 }
 
 export async function updateSeriesTitle(seriesId: string, title: string): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('series')
+  await getSupabase().from('series')
     .update({ title })
     .eq('id', seriesId).eq('user_id', user_id);
 }
@@ -177,15 +181,15 @@ export async function updateSeriesTitle(seriesId: string, title: string): Promis
 export async function saveActiveSeriesId(id: string | null): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
   if (id === null) {
-    await supabase.from('active_series').delete().eq('user_id', user_id);
+    await getSupabase().from('active_series').delete().eq('user_id', user_id);
   } else {
-    await supabase.from('active_series').upsert({ user_id, series_id: id });
+    await getSupabase().from('active_series').upsert({ user_id, series_id: id });
   }
 }
 
 export async function loadActiveSeriesId(): Promise<string | null> {
   const user_id = await uid(); if (!user_id) return null;
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('active_series').select('series_id')
     .eq('user_id', user_id).maybeSingle();
   return (data?.series_id as string | null) ?? null;
@@ -207,7 +211,7 @@ function rowToNovel(r: Record<string, unknown>): NovelRecord {
 
 export async function loadAllNovels(): Promise<NovelRecord[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('novels').select('*')
     .eq('user_id', user_id)
     .order('created_at', { ascending: false });
@@ -216,7 +220,7 @@ export async function loadAllNovels(): Promise<NovelRecord[]> {
 
 export async function loadNovels(seriesId?: string): Promise<NovelRecord[]> {
   const user_id = await uid(); if (!user_id) return [];
-  let q = supabase.from('novels').select('*').eq('user_id', user_id);
+  let q = getSupabase().from('novels').select('*').eq('user_id', user_id);
   if (seriesId) q = q.eq('series_id', seriesId);
   const { data } = await q.order('created_at', { ascending: false });
   return (data ?? []).map(rowToNovel);
@@ -224,7 +228,7 @@ export async function loadNovels(seriesId?: string): Promise<NovelRecord[]> {
 
 export async function saveNovel(novel: NovelRecord): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  const { error } = await supabase.from('novels').upsert({
+  const { error } = await getSupabase().from('novels').upsert({
     id:         novel.id,
     user_id,
     series_id:  novel.seriesId,
@@ -242,7 +246,7 @@ export async function saveNovel(novel: NovelRecord): Promise<void> {
 
 export async function deleteNovel(id: string): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('novels').delete().eq('id', id).eq('user_id', user_id);
+  await getSupabase().from('novels').delete().eq('id', id).eq('user_id', user_id);
 }
 
 // ─── World Bible ──────────────────────────────────────────────────────────────
@@ -260,14 +264,14 @@ function rowToWorldBible(r: Record<string, unknown>): WorldBible {
 
 export async function loadAllWorldBibles(): Promise<WorldBible[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('world_bibles').select('*').eq('user_id', user_id);
   return (data ?? []).map(rowToWorldBible);
 }
 
 export async function loadWorldBible(seriesId: string): Promise<WorldBible | null> {
   const user_id = await uid(); if (!user_id) return null;
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('world_bibles').select('*')
     .eq('user_id', user_id).eq('series_id', seriesId).maybeSingle();
   return data ? rowToWorldBible(data) : null;
@@ -275,7 +279,7 @@ export async function loadWorldBible(seriesId: string): Promise<WorldBible | nul
 
 export async function saveWorldBible(world: WorldBible): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('world_bibles').upsert({
+  await getSupabase().from('world_bibles').upsert({
     series_id:     world.seriesId,
     user_id,
     genre:         world.genre,
@@ -315,14 +319,14 @@ function rowToStoryBible(r: Record<string, unknown>): StoryBibleEntry {
 
 export async function loadAllStoryBibles(): Promise<StoryBibleEntry[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('story_bibles').select('*').eq('user_id', user_id);
   return (data ?? []).map(rowToStoryBible);
 }
 
 export async function loadStoryBibles(seriesId: string): Promise<StoryBibleEntry[]> {
   const user_id = await uid(); if (!user_id) return [];
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('story_bibles').select('*')
     .eq('user_id', user_id).eq('series_id', seriesId);
   return (data ?? []).map(rowToStoryBible);
@@ -330,7 +334,7 @@ export async function loadStoryBibles(seriesId: string): Promise<StoryBibleEntry
 
 export async function saveStoryBible(entry: StoryBibleEntry): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('story_bibles').upsert({
+  await getSupabase().from('story_bibles').upsert({
     novel_id:       entry.novelId,
     user_id,
     series_id:      entry.seriesId,
@@ -348,12 +352,12 @@ export async function saveStoryBible(entry: StoryBibleEntry): Promise<void> {
 export async function clearAll(): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
   await Promise.all([
-    supabase.from('story_bibles').delete().eq('user_id', user_id),
-    supabase.from('world_bibles').delete().eq('user_id', user_id),
-    supabase.from('novels').delete().eq('user_id', user_id),
-    supabase.from('active_series').delete().eq('user_id', user_id),
-    supabase.from('series').delete().eq('user_id', user_id),
-    supabase.from('mood_records').delete().eq('user_id', user_id),
-    supabase.from('weather_records').delete().eq('user_id', user_id),
+    getSupabase().from('story_bibles').delete().eq('user_id', user_id),
+    getSupabase().from('world_bibles').delete().eq('user_id', user_id),
+    getSupabase().from('novels').delete().eq('user_id', user_id),
+    getSupabase().from('active_series').delete().eq('user_id', user_id),
+    getSupabase().from('series').delete().eq('user_id', user_id),
+    getSupabase().from('mood_records').delete().eq('user_id', user_id),
+    getSupabase().from('weather_records').delete().eq('user_id', user_id),
   ]);
 }
