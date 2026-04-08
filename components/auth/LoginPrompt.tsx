@@ -1,102 +1,42 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
-import Script from 'next/script';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-interface CredentialResponse { credential: string; }
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            callback: (r: CredentialResponse) => void;
-            nonce?: string;
-            use_fedcm_for_prompt?: boolean;
-            auto_select?: boolean;
-          }) => void;
-          renderButton: (el: HTMLElement, opts: Record<string, unknown>) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
-
 export default function LoginPrompt() {
-  const router      = useRouter();
-  const buttonRef   = useRef<HTMLDivElement>(null);
-  const rawNonceRef = useRef<string | null>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const generateNonce = useCallback(async () => {
-    const bytes  = crypto.getRandomValues(new Uint8Array(32));
-    const raw    = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    const buf    = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-    const hashed = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    return { raw, hashed };
-  }, []);
-
-  const handleCredential = useCallback(async (res: CredentialResponse) => {
+  async function handleLogin() {
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithIdToken({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      token: res.credential,
-      nonce: rawNonceRef.current ?? undefined,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { access_type: 'offline', prompt: 'consent' },
+      },
     });
-    if (error) { setError(`로그인 실패: ${error.message}`); return; }
-    router.refresh();
-  }, [router]);
-
-  useEffect(() => {
-    if (!scriptLoaded || !buttonRef.current || !window.google) return;
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId) { setError('NEXT_PUBLIC_GOOGLE_CLIENT_ID 미설정'); return; }
-
-    (async () => {
-      const { raw, hashed } = await generateNonce();
-      rawNonceRef.current = raw;
-
-      window.google!.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredential,
-        nonce: hashed,
-        use_fedcm_for_prompt: true,
-        auto_select: false,
-      });
-
-      window.google!.accounts.id.renderButton(buttonRef.current!, {
-        type: 'standard', theme: 'outline', size: 'large',
-        text: 'continue_with', shape: 'pill', locale: 'ko', width: 260,
-      });
-
-      window.google!.accounts.id.prompt();
-    })();
-  }, [scriptLoaded, generateNonce, handleCredential]);
+    if (error) console.error('[LoginPrompt]', error);
+  }
 
   return (
     <div className="rounded-2xl border border-brand-100 bg-white p-8 shadow-sm text-center space-y-5">
-      <Script
-        src="https://accounts.google.com/gsi/client"
-        strategy="afterInteractive"
-        onLoad={() => setScriptLoaded(true)}
-        onError={() => setError('Google 스크립트 로드 실패')}
-      />
       <div className="space-y-1.5">
         <p className="text-base font-bold text-slate-800">이야기를 시작하려면</p>
         <p className="text-sm text-slate-400">
           로그인하면 어떤 기기에서도<br />오늘의 한 편을 이어갈 수 있어요
         </p>
       </div>
-      <div className="flex justify-center min-h-[44px]">
-        <div ref={buttonRef} />
-      </div>
-      {error && <p className="text-xs text-rose-500">{error}</p>}
+      <button
+        onClick={handleLogin}
+        className="w-full flex items-center justify-center gap-2.5 rounded-2xl
+                   border border-slate-200 bg-white px-5 py-3 text-sm font-semibold
+                   text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+      >
+        <svg width="16" height="16" viewBox="0 0 18 18">
+          <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18"/>
+          <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17"/>
+          <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
+          <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.31"/>
+        </svg>
+        Google로 로그인
+      </button>
     </div>
   );
 }

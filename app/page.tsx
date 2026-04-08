@@ -48,9 +48,22 @@ export default function HomePage() {
   const prevActiveSeriesRef = useRef<Series | null>(null);
 
   useEffect(() => {
+    const supabase = createClient();
+
+    // auth 상태 변경 감지 — 로그인 완료 시 자동 반영
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser({ id: session.user.id });
+          window.location.reload(); // DB 데이터 새로 로드
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+
     (async () => {
-      // 로그인 상태 확인
-      const supabase = createClient();
+      // 초기 로그인 상태 확인
       const { data: { user: authUser } } = await supabase.auth.getUser();
       setUser(authUser ? { id: authUser.id } : null);
       if (!authUser) return; // 비로그인 시 DB 로드 스킵
@@ -86,6 +99,8 @@ export default function HomePage() {
       setActiveSeries(active);
       setNovels(active ? await loadNovels(active.id) : []);
     })();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   async function handleMoodSelect(emoji: MoodEmoji) {
