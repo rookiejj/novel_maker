@@ -10,25 +10,7 @@ interface CredentialResponse {
   select_by?: string;
 }
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            callback: (response: CredentialResponse) => void;
-            nonce?: string;
-            use_fedcm_for_prompt?: boolean;
-            auto_select?: boolean;
-          }) => void;
-          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
+// window.google 타입은 components/auth/LoginPrompt.tsx에서 선언
 
 // ─── 인앱 브라우저 감지 ────────────────────────────────────────────────────────
 type InAppInfo = {
