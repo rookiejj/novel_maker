@@ -4,7 +4,9 @@
 
 @layer base {
   body {
-    font-family: 'Noto Sans KR', system-ui, sans-serif;
+    font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+    background-color: #F0EEFF;
+    color: #1A1730;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -13,8 +15,14 @@
   }
 }
 
-/* Prose overrides for novel text */
+/* 소설 본문 타이포그래피 */
 .prose p {
   margin-bottom: 1em;
-  line-height: 1.9;
+  line-height: 2.0;
+  word-break: keep-all;
 }
+
+/* 스크롤바 커스터마이징 */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C9C1FF; border-radius: 2px; }

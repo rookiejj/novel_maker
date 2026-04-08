@@ -5,13 +5,13 @@ export type MoodType = MoodEmoji;
 
 export const MOOD_MAP: Record<MoodEmoji, { emoji: string; label: string; tw: string }> = {
   '😊': { emoji: '😊', label: '행복해',   tw: 'border-yellow-300 bg-yellow-50 text-yellow-700' },
-  '😌': { emoji: '😌', label: '평온해',   tw: 'border-green-300  bg-green-50  text-green-700'  },
-  '🤩': { emoji: '🤩', label: '설레',     tw: 'border-pink-300   bg-pink-50   text-pink-700'   },
-  '😰': { emoji: '😰', label: '불안해',   tw: 'border-blue-300   bg-blue-50   text-blue-700'   },
+  '😌': { emoji: '😌', label: '평온해',   tw: 'border-emerald-300 bg-emerald-50 text-emerald-700' },
+  '🤩': { emoji: '🤩', label: '설레',     tw: 'border-pink-300 bg-pink-50 text-pink-700' },
+  '😰': { emoji: '😰', label: '불안해',   tw: 'border-blue-300 bg-blue-50 text-blue-700' },
   '😢': { emoji: '😢', label: '슬퍼',     tw: 'border-indigo-300 bg-indigo-50 text-indigo-700' },
   '😴': { emoji: '😴', label: '피곤해',   tw: 'border-purple-300 bg-purple-50 text-purple-700' },
-  '😤': { emoji: '😤', label: '화나',     tw: 'border-red-300    bg-red-50    text-red-700'    },
-  '😑': { emoji: '😑', label: '무료해',   tw: 'border-stone-300  bg-stone-50  text-stone-500'  },
+  '😤': { emoji: '😤', label: '화나',     tw: 'border-rose-300 bg-rose-50 text-rose-700' },
+  '😑': { emoji: '😑', label: '무료해',   tw: 'border-slate-300 bg-slate-50 text-slate-500' },
 };
 
 export interface MoodEntry {
@@ -68,7 +68,8 @@ export interface NovelConfig {
   atmosphere: Atmosphere;
   style: WritingStyle;
   length: NovelLength;
-  seriesId?: string;           // ← 소속 시리즈 ID
+  seriesId?: string;
+  protagonistName?: string;        // ← 주인공 이름 (없으면 AI가 자유롭게 설정)
   worldBible?: WorldBible | null;
   storyBibles?: StoryBibleEntry[];
 }
@@ -77,7 +78,7 @@ export type NovelOptions = NovelConfig;
 
 export interface NovelRecord {
   id: string;
-  seriesId: string;            // ← 소속 시리즈 ID
+  seriesId: string;
   title: string;
   content: string;
   config: NovelConfig;
@@ -88,12 +89,12 @@ export interface NovelRecord {
 export type SavedNovel = NovelRecord;
 
 // ─── Series ───────────────────────────────────────────────────────────────────
-// 하나의 연재 = 고정 장르 + WorldBible + 여러 편의 NovelRecord
 
 export interface Series {
   id: string;
-  title: string;     // 예: "봄의 연대기" (WorldBible 확정 후 worldSetting 기반으로 업데이트)
+  title: string;
   genre: Genre;
+  protagonistName?: string;        // ← 최초 설정 후 고정
   episodeCount: number;
   createdAt: number;
 }
@@ -107,7 +108,7 @@ export interface CharacterProfile {
 }
 
 export interface WorldBible {
-  seriesId: string;            // ← 소속 시리즈 ID
+  seriesId: string;
   genre: Genre;
   worldSetting: string;
   characters: CharacterProfile[];
@@ -119,7 +120,7 @@ export interface WorldBible {
 
 export interface StoryBibleEntry {
   novelId: string;
-  seriesId: string;            // ← 소속 시리즈 ID
+  seriesId: string;
   title: string;
   date: string;
   mood: string;

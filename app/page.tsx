@@ -8,6 +8,7 @@ import NovelWizard from '@/components/novel/NovelWizard';
 import NovelViewer from '@/components/novel/NovelViewer';
 import NovelCard from '@/components/novel/NovelCard';
 import NovelReadModal from '@/components/novel/NovelReadModal';
+import SeriesPickerModal from '@/components/novel/SeriesPickerModal';
 import {
   getTodayMood, loadMoodHistory,
   loadNovels, deleteNovel,
@@ -23,24 +24,21 @@ import {
   MOOD_MAP, GENRE_MAP,
 } from '@/lib/types';
 import { generateId } from '@/lib/utils';
+import TwEmoji from '@/components/ui/TwEmoji';
 
 type Step = 'home' | 'wizard' | 'viewing';
 
 export default function HomePage() {
-  const [todayMood,    setTodayMood]    = useState<MoodEntry | null>(null);
-  const [moodHistory,  setMoodHistory]  = useState<MoodEntry[]>([]);
-
-  const [allSeries,    setAllSeries]    = useState<Series[]>([]);
-  const [activeSeries, setActiveSeries] = useState<Series | null>(null);
-  const [showAllSeries, setShowAllSeries] = useState(false);
-
+  const [todayMood,     setTodayMood]     = useState<MoodEntry | null>(null);
+  const [moodHistory,   setMoodHistory]   = useState<MoodEntry[]>([]);
+  const [allSeries,     setAllSeries]     = useState<Series[]>([]);
+  const [activeSeries,  setActiveSeries]  = useState<Series | null>(null);
+  const [showSeriesPicker, setShowSeriesPicker] = useState(false);
   const [step,          setStep]          = useState<Step>('home');
   const [currentConfig, setCurrentConfig] = useState<NovelConfig | null>(null);
+  const [novels,        setNovels]        = useState<NovelRecord[]>([]);
+  const [readingNovel,  setReadingNovel]  = useState<NovelRecord | null>(null);
 
-  const [novels,       setNovels]       = useState<NovelRecord[]>([]);
-  const [readingNovel, setReadingNovel] = useState<NovelRecord | null>(null);
-
-  // ─── 초기 로드 ────────────────────────────────────────────────────────────
   useEffect(() => {
     setTodayMood(getTodayMood());
     setMoodHistory(loadMoodHistory());
@@ -52,7 +50,6 @@ export default function HomePage() {
     setNovels(active ? loadNovels(active.id) : []);
   }, []);
 
-  // ─── 기분 선택 ────────────────────────────────────────────────────────────
   function handleMoodSelect(emoji: MoodEmoji) {
     const entry: MoodEntry = {
       date: new Date().toISOString().slice(0, 10),
@@ -63,53 +60,46 @@ export default function HomePage() {
     setMoodHistory(loadMoodHistory());
   }
 
-  // ─── 시리즈 전환 ──────────────────────────────────────────────────────────
   function switchSeries(series: Series) {
     setActiveSeries(series);
     saveActiveSeriesId(series.id);
-    setNovels(loadNovels(series.id)); // ← 해당 시리즈 목록으로 교체
-    setShowAllSeries(false);
+    setNovels(loadNovels(series.id));
+    setShowSeriesPicker(false);
     setStep('home');
   }
 
-  // ─── 위저드 완료 ──────────────────────────────────────────────────────────
   function handleWizardComplete(options: NovelOptions) {
     let series = activeSeries;
 
     if (!series) {
-      // 새 시리즈 생성
       const newSeries: Series = {
-        id:           generateId(),
-        title:        `${options.genre} 연재`,
-        genre:        options.genre,
-        episodeCount: 0,
-        createdAt:    Date.now(),
+        id:              generateId(),
+        title:           `${options.genre} 연재`,
+        genre:           options.genre,
+        protagonistName: options.protagonistName,
+        episodeCount:    0,
+        createdAt:       Date.now(),
       };
       saveSeries(newSeries);
       saveActiveSeriesId(newSeries.id);
       setAllSeries(loadAllSeries());
       setActiveSeries(newSeries);
-      setNovels([]); // ← 새 시리즈이므로 목록 초기화
+      setNovels([]);
       series = newSeries;
     }
 
-    const worldBible  = loadWorldBible(series.id);
-    const storyBibles = loadStoryBibles(series.id);
-
     setCurrentConfig({
       ...options,
-      seriesId:    series.id,
-      worldBible:  worldBible  ?? null,
-      storyBibles: storyBibles ?? [],
+      seriesId:        series.id,
+      protagonistName: series.protagonistName,
+      worldBible:      loadWorldBible(series.id) ?? null,
+      storyBibles:     loadStoryBibles(series.id) ?? [],
     });
     setStep('viewing');
   }
 
-  // ─── 소설 저장 후 콜백 ────────────────────────────────────────────────────
   async function handleNovelSaved(record: NovelRecord) {
     const seriesId = record.seriesId;
-
-    // 현재 활성 시리즈의 목록만 갱신
     setNovels(loadNovels(seriesId));
 
     const worldBible   = loadWorldBible(seriesId);
@@ -122,31 +112,24 @@ export default function HomePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          novelId:       record.id,
-          seriesId,
-          title:         record.title,
-          content:       record.content,
-          genre:         record.config.genre,
-          date,
-          mood:          moodLabel,
-          isFirstNovel,
-          existingWorld: worldBible ?? undefined,
+          novelId: record.id, seriesId,
+          title: record.title, content: record.content,
+          genre: record.config.genre, date, mood: moodLabel,
+          isFirstNovel, existingWorld: worldBible ?? undefined,
         }),
       });
 
       if (res.ok) {
-        const { storyBible, worldBible: newWorldBible, newCharacterProfiles, suggestedSeriesTitle } =
+        const { storyBible, worldBible: newWB, newCharacterProfiles, suggestedSeriesTitle } =
           await res.json() as {
-            storyBible:           StoryBibleEntry;
-            worldBible:           WorldBible | null;
-            newCharacterProfiles: WorldBible['characters'];
-            suggestedSeriesTitle: string | null;
+            storyBible: StoryBibleEntry; worldBible: WorldBible | null;
+            newCharacterProfiles: WorldBible['characters']; suggestedSeriesTitle: string | null;
           };
 
         saveStoryBible(storyBible);
 
-        if (isFirstNovel && newWorldBible) {
-          saveWorldBible(newWorldBible);
+        if (isFirstNovel && newWB) {
+          saveWorldBible(newWB);
           if (suggestedSeriesTitle) {
             updateSeriesTitle(seriesId, suggestedSeriesTitle);
             const updated = loadAllSeries();
@@ -162,13 +145,11 @@ export default function HomePage() {
     }
   }
 
-  // ─── 소설 삭제 ────────────────────────────────────────────────────────────
   function handleDelete(id: string) {
     deleteNovel(id);
     if (activeSeries) setNovels(loadNovels(activeSeries.id));
   }
 
-  // ─── MoodEntry → MoodRecord ───────────────────────────────────────────────
   const recentMoods: MoodRecord[] = moodHistory
     .slice(0, 7)
     .map((e, i) => ({ id: String(i), date: e.date, mood: e.emoji }));
@@ -177,73 +158,26 @@ export default function HomePage() {
     ? { id: '0', date: todayMood.date, mood: todayMood.emoji }
     : null;
 
-  // ─── 렌더 ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-800">
+    <div className="min-h-screen bg-[#F0EEFF] text-slate-900">
       <Header />
 
-      <main className="max-w-xl mx-auto px-4 py-10 space-y-10">
+      <main className="max-w-xl mx-auto px-4 py-8 space-y-8">
 
-        {/* 기분 선택 */}
-        <section>
-          <h2 className="text-sm font-semibold text-stone-400 uppercase tracking-widest mb-3">
-            오늘의 기분
-          </h2>
-          <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
-          <MoodHistory records={recentMoods} />
-
-          {/* 기분이 소설에 영향을 준다는 안내 */}
-          {todayMood && (
-            <p className="mt-2 text-xs text-stone-400 text-center">
-              {MOOD_MAP[todayMood.emoji].emoji} 오늘의 기분 <strong className="text-stone-500">"{MOOD_MAP[todayMood.emoji].label}"</strong>이
-              이야기의 분위기와 주인공의 감정에 반영됩니다
-            </p>
-          )}
-        </section>
-
-        <div className="text-stone-300 text-center text-2xl select-none">✦</div>
-
-        {/* 시리즈 & 소설 생성 */}
+        {/* ── 시리즈 + 생성 버튼 (상단) ────────────────────────── */}
         {step === 'home' && (
-          <section className="space-y-4">
-            {activeSeries ? (
-              <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{GENRE_MAP[activeSeries.genre].icon}</span>
-                    <div>
-                      <p className="font-serif font-semibold text-stone-800">{activeSeries.title}</p>
-                      <p className="text-xs text-stone-400">
-                        {GENRE_MAP[activeSeries.genre].label} · {activeSeries.episodeCount}편
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs bg-stone-100 text-stone-500 px-2 py-1 rounded-full">연재 중</span>
-                </div>
-                <button
-                  disabled={!todayMood}
-                  onClick={() => setStep('wizard')}
-                  className="w-full py-2.5 rounded-xl bg-stone-800 text-stone-50 text-sm
-                             disabled:opacity-40 hover:bg-stone-700 transition-colors"
-                >
-                  다음 이야기 이어 쓰기
-                </button>
-                {!todayMood && (
-                  <p className="text-xs text-center text-stone-400">기분을 먼저 기록해주세요</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-center text-stone-400">첫 번째 시리즈를 시작해보세요</p>
-            )}
-
+          <section className="space-y-3">
+            {/* 상단: 다른 시리즈 / 새 시리즈 버튼 */}
             <div className="flex gap-2">
               {allSeries.length > 0 && (
                 <button
-                  onClick={() => setShowAllSeries(v => !v)}
-                  className="flex-1 py-2 rounded-xl border border-stone-200 text-stone-500 text-sm
-                             hover:bg-stone-100 transition-colors"
+                  onClick={() => setShowSeriesPicker(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl
+                             border border-brand-200 bg-white text-brand-600 text-sm font-semibold
+                             hover:bg-brand-50 transition-colors"
                 >
-                  {showAllSeries ? '접기' : `다른 시리즈 (${allSeries.length}개)`}
+                  <span>📚</span>
+                  다른 시리즈 ({allSeries.length}개)
                 </button>
               )}
               <button
@@ -254,52 +188,68 @@ export default function HomePage() {
                   setNovels([]);
                   setStep('wizard');
                 }}
-                className="flex-1 py-2 rounded-xl border border-stone-300 text-stone-600 text-sm
-                           disabled:opacity-40 hover:bg-stone-100 transition-colors"
+                className="flex-1 py-2.5 rounded-2xl border border-brand-200 bg-white
+                           text-brand-600 text-sm font-semibold
+                           disabled:opacity-40 hover:bg-brand-50 transition-colors"
               >
-                + 새 시리즈 시작
+                + 새 시리즈
               </button>
             </div>
 
-            {showAllSeries && (
-              <div className="space-y-2">
-                {allSeries.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => switchSeries(s)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-left
-                      transition-colors hover:bg-stone-50
-                      ${activeSeries?.id === s.id
-                        ? 'border-stone-400 bg-stone-50'
-                        : 'border-stone-200 bg-white'}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{GENRE_MAP[s.genre].icon}</span>
-                      <div>
-                        <p className="text-sm font-medium text-stone-700">{s.title}</p>
-                        <p className="text-xs text-stone-400">{s.episodeCount}편</p>
-                      </div>
+            {/* 하단: 활성 시리즈 카드 */}
+            {activeSeries ? (
+              <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50">
+                      <TwEmoji emoji={GENRE_MAP[activeSeries.genre].icon} size={22} />
                     </div>
-                    {activeSeries?.id === s.id && (
-                      <span className="text-xs text-stone-500">선택됨</span>
-                    )}
-                  </button>
-                ))}
+                    <div>
+                      <p className="font-bold text-slate-900 leading-tight">{activeSeries.title}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {GENRE_MAP[activeSeries.genre].label}
+                        {activeSeries.protagonistName && ` · ${activeSeries.protagonistName}`}
+                        {` · ${activeSeries.episodeCount}편`}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold text-brand-500 bg-brand-50
+                                   px-2.5 py-1 rounded-full border border-brand-100">
+                    연재 중
+                  </span>
+                </div>
+
+                <button
+                  disabled={!todayMood}
+                  onClick={() => setStep('wizard')}
+                  className="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold
+                             disabled:opacity-40 hover:bg-brand-700 transition-colors shadow-sm"
+                >
+                  다음 이야기 이어 쓰기
+                </button>
+                {!todayMood && (
+                  <p className="text-xs text-center text-slate-400">기분을 먼저 기록해주세요</p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border-2 border-dashed border-brand-200 p-8 text-center">
+                <p className="text-sm text-slate-400">첫 번째 시리즈를 시작해보세요 ✨</p>
               </div>
             )}
           </section>
         )}
 
-        {/* 위저드 */}
+        {/* ── 위저드 ───────────────────────────────────────────── */}
         {step === 'wizard' && (
           <NovelWizard
             lockedGenre={activeSeries?.genre}
+            lockedProtagonistName={activeSeries?.protagonistName}
             onGenerate={handleWizardComplete}
             onCancel={() => setStep('home')}
           />
         )}
 
-        {/* NovelViewer */}
+        {/* ── NovelViewer ──────────────────────────────────────── */}
         {step === 'viewing' && currentConfig && (
           <NovelViewer
             config={currentConfig}
@@ -310,20 +260,33 @@ export default function HomePage() {
           />
         )}
 
-        {/* 지난 이야기 — 항상 표시, 현재 시리즈 것만 */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-brand-100" />
+          <div className="w-1.5 h-1.5 rounded-full bg-brand-200" />
+          <div className="flex-1 h-px bg-brand-100" />
+        </div>
+
+        {/* ── 기분 (하단) ──────────────────────────────────────── */}
+        <section className="space-y-1">
+          <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
+          <MoodHistory records={recentMoods} />
+          {todayMood && (
+            <p className="text-xs text-center text-brand-400 pt-1">
+              <TwEmoji emoji={MOOD_MAP[todayMood.emoji].emoji} size={13} className="mr-1 align-middle" />
+              <strong>"{MOOD_MAP[todayMood.emoji].label}"</strong> 기분이 이야기 분위기와 주인공 감정에 반영됩니다
+            </p>
+          )}
+        </section>
+
+        {/* ── 지난 이야기 ──────────────────────────────────────── */}
         {novels.length > 0 && (
           <section>
-            <h2 className="text-sm font-semibold text-stone-400 uppercase tracking-widest mb-4">
-              {activeSeries ? `${activeSeries.title} — 지난 이야기` : '지난 이야기'}
+            <h2 className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest mb-3">
+              {activeSeries ? `${activeSeries.title}` : '지난 이야기'}
             </h2>
             <div className="space-y-3">
               {novels.map(novel => (
-                <NovelCard
-                  key={novel.id}
-                  novel={novel}
-                  onRead={setReadingNovel}
-                  onDelete={handleDelete}
-                />
+                <NovelCard key={novel.id} novel={novel} onRead={setReadingNovel} onDelete={handleDelete} />
               ))}
             </div>
           </section>
@@ -331,6 +294,14 @@ export default function HomePage() {
 
       </main>
 
+      {showSeriesPicker && (
+        <SeriesPickerModal
+          series={allSeries}
+          activeId={activeSeries?.id}
+          onSelect={switchSeries}
+          onClose={() => setShowSeriesPicker(false)}
+        />
+      )}
       {readingNovel && (
         <NovelReadModal novel={readingNovel} onClose={() => setReadingNovel(null)} />
       )}

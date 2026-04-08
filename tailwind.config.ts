@@ -9,8 +9,22 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans:  ["'Noto Sans KR'", 'system-ui', 'sans-serif'],
-        serif: ["'Noto Serif KR'", 'Georgia', 'serif'],
+        sans:  ['"Pretendard Variable"', 'Pretendard', '"Noto Sans KR"', 'system-ui', 'sans-serif'],
+        serif: ['"Noto Serif KR"', 'Georgia', 'serif'],
+      },
+      colors: {
+        brand: {
+          50:  '#F0EEFF',
+          100: '#E4E0FF',
+          200: '#C9C1FF',
+          300: '#A99CFF',
+          400: '#8876F5',
+          500: '#6E56E8',
+          600: '#5B43D4',
+          700: '#4A34B8',
+          800: '#3A2890',
+          900: '#2C1E6B',
+        },
       },
     },
   },
