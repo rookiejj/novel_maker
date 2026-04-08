@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength } from '@/lib/types';
+import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
 
 const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사'];
@@ -17,13 +17,14 @@ const GENRE_EMOJI: Record<Genre, string> = {
 interface Props {
   lockedGenre?:           Genre;
   lockedProtagonistName?: string;
-  lockedTotalEpisodes?:   SeriesLength; // 기존 시리즈면 잠금
+  lockedTotalEpisodes?:   SeriesLength;
+  lockedGender?:          ProtagGender;
   onGenerate: (options: NovelOptions) => void;
   onCancel:   () => void;
 }
 
 export default function NovelWizard({
-  lockedGenre, lockedProtagonistName, lockedTotalEpisodes, onGenerate, onCancel,
+  lockedGenre, lockedProtagonistName, lockedGender, lockedTotalEpisodes, onGenerate, onCancel,
 }: Props) {
   const [genre,           setGenre]           = useState<Genre>(lockedGenre ?? '일상');
   const [atmosphere,      setAtmosphere]      = useState<Atmosphere>('잔잔한');
@@ -31,6 +32,7 @@ export default function NovelWizard({
   const [length,          setLength]          = useState<NovelLength>('중편 (1500자)');
   const [protagonistName, setProtagonistName] = useState('');
   const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(20);
+  const [gender,          setGender]          = useState<ProtagGender | null>(null);
 
   const isNewSeries = !lockedGenre;
 
@@ -90,6 +92,38 @@ export default function NovelWizard({
         <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
           <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">주인공</p>
           <p className="text-sm font-semibold text-brand-700">{lockedProtagonistName}</p>
+        </div>
+      ) : null}
+
+
+      {/* 성별 — 새 시리즈: 필수 선택 / 기존 시리즈: 잠금 표시 */}
+      {isNewSeries ? (
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">
+            주인공 성별
+            <span className="ml-1.5 text-rose-400 font-semibold">*</span>
+            <span className="ml-1 text-slate-400 font-normal">(필수 · 설정 후 변경 불가)</span>
+          </label>
+          <div className="flex gap-2">
+            {(['남성', '여성', '중성'] as ProtagGender[]).map(g => (
+              <button
+                key={g}
+                onClick={() => setGender(g)}
+                className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  gender === g
+                    ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                }`}
+              >
+                {g === '남성' ? '👦 남성' : g === '여성' ? '👧 여성' : '🧑 중성'}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : lockedGender ? (
+        <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
+          <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">주인공 성별</p>
+          <p className="text-sm font-semibold text-brand-700">{lockedGender}</p>
         </div>
       ) : null}
 
@@ -164,11 +198,16 @@ export default function NovelWizard({
           취소
         </button>
         <button
-          onClick={() => onGenerate({
-            genre, atmosphere, style, length,
-            protagonistName: isNewSeries ? (protagonistName.trim() || undefined) : lockedProtagonistName,
-            totalEpisodes:   isNewSeries ? totalEpisodes : lockedTotalEpisodes,
-          })}
+          disabled={isNewSeries && !gender}
+          onClick={() => {
+            if (isNewSeries && !gender) return;
+            onGenerate({
+              genre, atmosphere, style, length,
+              protagonistName:  isNewSeries ? (protagonistName.trim() || undefined) : lockedProtagonistName,
+              protagonistGender: isNewSeries ? gender! : lockedGender,
+              totalEpisodes:    isNewSeries ? totalEpisodes : lockedTotalEpisodes,
+            });
+          }}
           className="flex-1 py-3 rounded-2xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors shadow-sm">
           이야기 만들기
         </button>

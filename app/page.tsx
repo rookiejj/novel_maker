@@ -19,7 +19,7 @@ import {
 import {
   MoodEmoji, MoodEntry, MoodRecord,
   NovelConfig, NovelOptions, NovelRecord,
-  Series, SeriesLength, WorldBible, StoryBibleEntry,
+  Series, SeriesLength, ProtagGender, WorldBible, StoryBibleEntry,
   MOOD_MAP, GENRE_MAP,
 } from '@/lib/types';
 import { generateId } from '@/lib/utils';
@@ -79,8 +79,9 @@ export default function HomePage() {
         id:              generateId(),
         title:           `${options.genre} 연재`,
         genre:           options.genre,
-        protagonistName: options.protagonistName,
-        totalEpisodes:   (options.totalEpisodes as SeriesLength) ?? 20,
+        protagonistName:   options.protagonistName,
+        protagonistGender: (options.protagonistGender as ProtagGender) ?? '중성',
+        totalEpisodes:     (options.totalEpisodes as SeriesLength) ?? 20,
         episodeCount:    0,
         createdAt:       Date.now(),
       };
@@ -95,8 +96,9 @@ export default function HomePage() {
     setCurrentConfig({
       ...options,
       seriesId:        series.id,
-      protagonistName: series.protagonistName,
-      totalEpisodes:   series.totalEpisodes,
+      protagonistName:   series.protagonistName,
+      protagonistGender: series.protagonistGender,
+      totalEpisodes:     series.totalEpisodes,
       currentEpisode,
       worldBible:      loadWorldBible(series.id) ?? null,
       storyBibles:     loadStoryBibles(series.id) ?? [],
@@ -293,6 +295,7 @@ export default function HomePage() {
           <NovelWizard
             lockedGenre={activeSeries?.genre}
             lockedProtagonistName={activeSeries?.protagonistName}
+            lockedGender={activeSeries?.protagonistGender}
             lockedTotalEpisodes={activeSeries?.totalEpisodes}
             onGenerate={handleWizardComplete}
             onCancel={() => setStep('home')}

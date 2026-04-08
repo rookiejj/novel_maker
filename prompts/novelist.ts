@@ -107,9 +107,12 @@ const LENGTH_GUIDE: Record<string, string> = {
   '장편 (3000자)': '3000자 내외',
 };
 
-function buildProtagonistSection(name?: string): string {
-  if (!name) return '';
-  return `\n## 주인공\n- 이름: **${name}** (반드시 이 이름을 사용할 것. 변경·생략 금지)\n`;
+function buildProtagonistSection(name?: string, gender?: string): string {
+  if (!name && !gender) return '';
+  const lines: string[] = [];
+  if (name)   lines.push(`- 이름: **${name}** (반드시 이 이름을 사용할 것. 변경·생략 금지)`);
+  if (gender) lines.push(`- 성별: **${gender}** (대명사·묘사에 일관되게 반영할 것)`);
+  return `\n## 주인공\n${lines.join('\n')}\n`;
 }
 
 function buildWorldSection(world: WorldBible): string {
@@ -167,13 +170,13 @@ ${latest.threads.length > 0 ? `- 미해결 복선(${latest.threads.join(', ')})�
 export function buildSystemPrompt({ config, recentMoods }: PromptInput): string {
   const {
     genre, atmosphere, style, length,
-    protagonistName, totalEpisodes, currentEpisode,
+    protagonistName, protagonistGender, totalEpisodes, currentEpisode,
     worldBible, storyBibles,
   } = config;
 
   const ctx               = buildContext(recentMoods);
   const contextSection    = buildContextSection(ctx);
-  const protagonistSection = buildProtagonistSection(protagonistName);
+  const protagonistSection = buildProtagonistSection(protagonistName, protagonistGender);
   const worldSection      = worldBible ? buildWorldSection(worldBible) : '';
   const continuitySection = storyBibles?.length ? buildContinuitySection(storyBibles, ctx) : '';
   const narrativeSection  = (totalEpisodes && currentEpisode)

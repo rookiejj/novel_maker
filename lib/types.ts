@@ -44,6 +44,8 @@ export type NovelLength =
 
 export type SeriesLength = 20 | 30;
 
+export type ProtagGender = '남성' | '여성' | '중성';
+
 export const GENRE_MAP: Record<Genre, { icon: string; label: string }> = {
   '로맨스':   { icon: '💕', label: '로맨스'   },
   'SF':       { icon: '🚀', label: 'SF'       },
@@ -72,6 +74,7 @@ export interface NovelConfig {
   length: NovelLength;
   seriesId?: string;
   protagonistName?: string;
+  protagonistGender?: ProtagGender;
   totalEpisodes?: SeriesLength;  // 시리즈 총 편수
   currentEpisode?: number;       // 이번 편 번호 (1-based)
   worldBible?: WorldBible | null;
@@ -99,6 +102,7 @@ export interface Series {
   title: string;
   genre: Genre;
   protagonistName?: string;
+  protagonistGender: ProtagGender;  // 필수
   totalEpisodes: SeriesLength;   // 총 편수 (한 번 설정 후 고정)
   episodeCount: number;
   createdAt: number;
