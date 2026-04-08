@@ -1,20 +1,115 @@
 'use client';
 
+import { useRef, useCallback } from 'react';
+import Script from 'next/script';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export default function LoginPage() {
-  async function handleGoogleLogin() {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+interface CredentialResponse {
+  credential: string;
+  select_by?: string;
+}
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: CredentialResponse) => void;
+            nonce?: string;
+            use_fedcm_for_prompt?: boolean;
+            auto_select?: boolean;
+          }) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+          prompt: () => void;
+        };
+      };
+    };
   }
+}
+
+export default function LoginPage() {
+  const router = useRouter();
+  const buttonRef = useRef<HTMLDivElement>(null);
+  const rawNonceRef = useRef<string | null>(null);
+
+  // nonce: raw를 supabase에, SHA-256 hashed를 google에 전달
+  const generateNonce = useCallback(async (): Promise<{ raw: string; hashed: string }> => {
+    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+    const raw = Array.from(randomBytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(raw));
+    const hashed = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    return { raw, hashed };
+  }, []);
+
+  const handleCredential = useCallback(async (response: CredentialResponse) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.credential,
+        nonce: rawNonceRef.current ?? undefined,
+      });
+      if (error) {
+        console.error('[Supabase signInWithIdToken]', error);
+        alert(`로그인 실패: ${error.message}`);
+        return;
+      }
+      router.push('/');
+      router.refresh();
+    } catch (err) {
+      console.error('[GSI callback]', err);
+    }
+  }, [router]);
+
+  const initializeGsi = useCallback(async () => {
+    if (!window.google || !buttonRef.current) return;
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      console.error('NEXT_PUBLIC_GOOGLE_CLIENT_ID 환경변수가 설정되지 않았습니다.');
+      return;
+    }
+
+    const { raw, hashed } = await generateNonce();
+    rawNonceRef.current = raw;
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleCredential,
+      nonce: hashed,
+      use_fedcm_for_prompt: true,
+      auto_select: false,
+    });
+
+    window.google.accounts.id.renderButton(buttonRef.current, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      text: 'continue_with',
+      shape: 'pill',
+      logo_alignment: 'left',
+      locale: 'ko',
+    });
+
+    // One Tap 프롬프트 (옵션)
+    window.google.accounts.id.prompt();
+  }, [generateNonce, handleCredential]);
 
   return (
     <div className="min-h-screen bg-[#F0EEFF] flex flex-col items-center justify-center px-4">
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onReady={initializeGsi}
+      />
       <div className="w-full max-w-sm space-y-8 text-center">
         <div>
           <h1 className="text-2xl font-bold text-brand-700">한편</h1>
@@ -23,20 +118,9 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 rounded-2xl
-                     border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold
-                     text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18">
-            <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18"/>
-            <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17"/>
-            <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
-            <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.31"/>
-          </svg>
-          Google로 계속하기
-        </button>
+        <div className="flex justify-center">
+          <div ref={buttonRef} />
+        </div>
 
         <p className="text-xs text-slate-400">
           로그인하면 어떤 기기에서도 이야기를 이어갈 수 있습니다
