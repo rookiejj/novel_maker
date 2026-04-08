@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions } from '@/lib/types';
+import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
 
-const GENRES: Genre[]         = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사'];
-const ATMOSPHERES: Atmosphere[]   = ['따뜻한', '서늘한', '몽환적인', '긴장감 있는', '유쾌한', '슬픈', '잔잔한'];
-const STYLES: WritingStyle[]      = ['간결한 문체', '서정적 문체', '대화 중심', '묘사 중심'];
-const LENGTHS: NovelLength[]      = ['단편 (500자)', '중편 (1500자)', '장편 (3000자)'];
+const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사'];
+const ATMOSPHERES: Atmosphere[] = ['따뜻한', '서늘한', '몽환적인', '긴장감 있는', '유쾌한', '슬픈', '잔잔한'];
+const STYLES: WritingStyle[]    = ['간결한 문체', '서정적 문체', '대화 중심', '묘사 중심'];
+const LENGTHS: NovelLength[]    = ['단편 (500자)', '중편 (1500자)', '장편 (3000자)'];
 
 const GENRE_EMOJI: Record<Genre, string> = {
   '로맨스': '💕', 'SF': '🚀', '판타지': '🔮', '공포': '👻',
@@ -15,31 +15,31 @@ const GENRE_EMOJI: Record<Genre, string> = {
 };
 
 interface Props {
-  lockedGenre?:          Genre;
-  lockedProtagonistName?: string; // 기존 시리즈의 주인공 이름 (표시용)
+  lockedGenre?:           Genre;
+  lockedProtagonistName?: string;
+  lockedTotalEpisodes?:   SeriesLength; // 기존 시리즈면 잠금
   onGenerate: (options: NovelOptions) => void;
   onCancel:   () => void;
 }
 
-export default function NovelWizard({ lockedGenre, lockedProtagonistName, onGenerate, onCancel }: Props) {
+export default function NovelWizard({
+  lockedGenre, lockedProtagonistName, lockedTotalEpisodes, onGenerate, onCancel,
+}: Props) {
   const [genre,           setGenre]           = useState<Genre>(lockedGenre ?? '일상');
   const [atmosphere,      setAtmosphere]      = useState<Atmosphere>('잔잔한');
   const [style,           setStyle]           = useState<WritingStyle>('서정적 문체');
   const [length,          setLength]          = useState<NovelLength>('중편 (1500자)');
   const [protagonistName, setProtagonistName] = useState('');
+  const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(20);
 
-  const isNewSeries = !lockedGenre; // 새 시리즈면 주인공 이름 입력 가능
+  const isNewSeries = !lockedGenre;
 
-  function handleSubmit() {
-    onGenerate({
-      genre,
-      atmosphere,
-      style,
-      length,
-      protagonistName: isNewSeries
-        ? (protagonistName.trim() || undefined)
-        : lockedProtagonistName,
-    });
+  function chip(active: boolean) {
+    return `px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+      active
+        ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+        : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+    }`;
   }
 
   return (
@@ -60,29 +60,20 @@ export default function NovelWizard({ lockedGenre, lockedProtagonistName, onGene
         </div>
         <div className="flex flex-wrap gap-2">
           {GENRES.map(g => (
-            <button
-              key={g}
-              disabled={!!lockedGenre}
-              onClick={() => setGenre(g)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all
-                ${genre === g
-                  ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'}
-                ${lockedGenre ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <TwEmoji emoji={GENRE_EMOJI[g]} size={14} />
-              {g}
+            <button key={g} disabled={!!lockedGenre} onClick={() => setGenre(g)}
+              className={`${chip(genre === g)} flex items-center gap-1.5 ${lockedGenre ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <TwEmoji emoji={GENRE_EMOJI[g]} size={13} />{g}
             </button>
           ))}
         </div>
       </div>
 
-      {/* 주인공 이름 (새 시리즈만) */}
-      {isNewSeries && (
+      {/* 주인공 이름 */}
+      {isNewSeries ? (
         <div className="space-y-2">
           <label className="text-xs font-semibold text-slate-500">
             주인공 이름
-            <span className="ml-1.5 text-slate-400 font-normal">(선택 · 한 번 설정하면 변경 불가)</span>
+            <span className="ml-1.5 text-slate-400 font-normal">(선택 · 설정 후 변경 불가)</span>
           </label>
           <input
             type="text"
@@ -95,31 +86,53 @@ export default function NovelWizard({ lockedGenre, lockedProtagonistName, onGene
                        focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
         </div>
-      )}
-
-      {/* 기존 시리즈 — 주인공 이름 표시 */}
-      {!isNewSeries && lockedProtagonistName && (
+      ) : lockedProtagonistName ? (
         <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
-          <p className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-0.5">주인공</p>
+          <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">주인공</p>
           <p className="text-sm font-semibold text-brand-700">{lockedProtagonistName}</p>
         </div>
-      )}
+      ) : null}
+
+      {/* 총 편수 — 새 시리즈에서만 선택 */}
+      {isNewSeries ? (
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">
+            시리즈 총 편수
+            <span className="ml-1.5 text-slate-400 font-normal">(설정 후 변경 불가)</span>
+          </label>
+          <div className="flex gap-3">
+            {([20, 30] as SeriesLength[]).map(n => (
+              <button
+                key={n}
+                onClick={() => setTotalEpisodes(n)}
+                className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                  totalEpisodes === n
+                    ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                }`}
+              >
+                {n}편
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            선택한 편수에 맞게 기·승·전·결 구조로 이야기가 자동으로 전개됩니다.
+            마지막 편에서 자연스럽게 완결됩니다.
+          </p>
+        </div>
+      ) : lockedTotalEpisodes ? (
+        <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
+          <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">시리즈 구성</p>
+          <p className="text-sm font-semibold text-brand-700">총 {lockedTotalEpisodes}편으로 완결</p>
+        </div>
+      ) : null}
 
       {/* 분위기 */}
       <div className="space-y-2">
         <label className="text-xs font-semibold text-slate-500">분위기</label>
         <div className="flex flex-wrap gap-2">
           {ATMOSPHERES.map(a => (
-            <button
-              key={a}
-              onClick={() => setAtmosphere(a)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all
-                ${atmosphere === a
-                  ? 'bg-brand-600 text-white border-brand-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'}`}
-            >
-              {a}
-            </button>
+            <button key={a} onClick={() => setAtmosphere(a)} className={chip(atmosphere === a)}>{a}</button>
           ))}
         </div>
       </div>
@@ -129,16 +142,7 @@ export default function NovelWizard({ lockedGenre, lockedProtagonistName, onGene
         <label className="text-xs font-semibold text-slate-500">필체</label>
         <div className="flex flex-wrap gap-2">
           {STYLES.map(s => (
-            <button
-              key={s}
-              onClick={() => setStyle(s)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all
-                ${style === s
-                  ? 'bg-brand-600 text-white border-brand-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'}`}
-            >
-              {s}
-            </button>
+            <button key={s} onClick={() => setStyle(s)} className={chip(style === s)}>{s}</button>
           ))}
         </div>
       </div>
@@ -148,34 +152,24 @@ export default function NovelWizard({ lockedGenre, lockedProtagonistName, onGene
         <label className="text-xs font-semibold text-slate-500">분량</label>
         <div className="flex flex-wrap gap-2">
           {LENGTHS.map(l => (
-            <button
-              key={l}
-              onClick={() => setLength(l)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all
-                ${length === l
-                  ? 'bg-brand-600 text-white border-brand-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'}`}
-            >
-              {l}
-            </button>
+            <button key={l} onClick={() => setLength(l)} className={chip(length === l)}>{l}</button>
           ))}
         </div>
       </div>
 
-      {/* 액션 버튼 */}
+      {/* 액션 */}
       <div className="flex gap-3 pt-2">
-        <button
-          onClick={onCancel}
-          className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 text-sm
-                     font-semibold hover:bg-slate-50 transition-colors"
-        >
+        <button onClick={onCancel}
+          className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors">
           취소
         </button>
         <button
-          onClick={handleSubmit}
-          className="flex-1 py-3 rounded-2xl bg-brand-600 text-white text-sm font-semibold
-                     hover:bg-brand-700 transition-colors shadow-sm"
-        >
+          onClick={() => onGenerate({
+            genre, atmosphere, style, length,
+            protagonistName: isNewSeries ? (protagonistName.trim() || undefined) : lockedProtagonistName,
+            totalEpisodes:   isNewSeries ? totalEpisodes : lockedTotalEpisodes,
+          })}
+          className="flex-1 py-3 rounded-2xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors shadow-sm">
           이야기 만들기
         </button>
       </div>
