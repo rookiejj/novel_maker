@@ -217,7 +217,7 @@ export default function HomePage() {
         {/* ── 1. 기분 (최상단, 컴팩트) ─────────────────────────── */}
         <section className="space-y-1">
           <MoodSelector todayMood={todayMood?.emoji ?? null} onSelect={handleMoodSelect} />
-          <div className="mt-4">
+          <div className="mt-6">
             <WeatherSelector todayWeather={todayWeather} onSelect={setTodayWeather} />
           </div>
           {contextHint && (
