@@ -30,17 +30,19 @@ function buildContext(recentMoods: MoodRecord[], weatherInfo?: { label: string; 
 }
 
 function buildContextSection(ctx: StoryContext): string {
+  const weatherLine = ctx.weather
+    ? `- 오늘의 날씨: ${ctx.weather} ${ctx.weatherEmoji ?? ''}`
+    : '';
+
   return `
-## 오늘의 컨텍스트 (이야기에 반드시 반영할 것)
+## 오늘의 컨텍스트
 
-- 오늘의 기분: **${ctx.currentMoodLabel}** ${ctx.currentMoodEmoji}
+- 오늘의 기분: ${ctx.currentMoodLabel} ${ctx.currentMoodEmoji}
 - 최근 7일 기분 흐름: ${ctx.moodHistory}
+${weatherLine}
 
-**반영 지침:**
-- 주인공의 감정·행동이 오늘 기분(${ctx.currentMoodLabel})과 자연스럽게 일치해야 한다
-- "${ctx.currentMoodLabel}"의 감정이 이야기 전반에 배어 있어야 한다 (단순 언급이 아닌 서사에 녹여낼 것)
-- 최근 기분 흐름을 참고해 감정의 연속성을 표현한다${ctx.weather ? `
-- 날씨(${ctx.weather})의 감각적 묘사(${ctx.weatherEffect})가 장면 묘사나 인물의 감정에 자연스럽게 스며들어야 한다` : ''}
+위 기분과 날씨는 이야기에 자연스럽게 녹아들면 좋습니다.
+억지로 끼워넣지 말고, 이야기 흐름상 어울리는 순간에만 살짝 스치듯 담거나 넘어가도 됩니다.
 `;
 }
 
