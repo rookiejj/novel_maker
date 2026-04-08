@@ -11,9 +11,7 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll(); },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -23,12 +21,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // 로그인 안 된 상태에서 /auth 외 페이지 접근 시 로그인 페이지로
-  if (!user && !request.nextUrl.pathname.startsWith('/auth')) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
-  }
+  // 세션 갱신만 처리 — 강제 리다이렉트 없음
+  // 메인 페이지에서 로그인 상태에 따라 UI를 직접 처리
+  await supabase.auth.getUser();
 
   return supabaseResponse;
 }
