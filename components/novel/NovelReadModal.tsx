@@ -11,8 +11,17 @@ interface Props {
 
 export default function NovelReadModal({ novel, onClose }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-stone-900/60 p-4 pt-16 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-2xl border border-stone-200 bg-white shadow-2xl">
+    // 배경(백드롭) 클릭 시 닫기
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto
+                 bg-stone-900/60 p-4 pt-16 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      {/* 모달 본체 — 클릭 이벤트 버블링 차단 */}
+      <div
+        className="w-full max-w-xl rounded-2xl border border-stone-200 bg-white shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Toolbar */}
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3">
           <div className="flex items-center gap-2 text-xs text-stone-400">
@@ -21,11 +30,18 @@ export default function NovelReadModal({ novel, onClose }: Props) {
             <span>·</span>
             <span>{ATMOSPHERE_MAP[novel.config.atmosphere].label}</span>
             <span>·</span>
-            <span>{MOOD_MAP[novel.baseMood].emoji}</span>
+            <span title={`작성 당시 기분: ${MOOD_MAP[novel.baseMood].label}`}>
+              {MOOD_MAP[novel.baseMood].emoji}
+            </span>
             <span>·</span>
             <span>{formatDate(novel.createdAt)}</span>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-lg leading-none">×</button>
+          <button
+            onClick={onClose}
+            className="text-stone-400 hover:text-stone-600 text-lg leading-none"
+          >
+            ×
+          </button>
         </div>
 
         {/* Body */}

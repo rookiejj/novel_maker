@@ -20,7 +20,7 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
   const [raw,    setRaw]    = useState('');
   const [status, setStatus] = useState<Status>('streaming');
   const [saved,  setSaved]  = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const bodyRef  = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -36,10 +36,7 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
           signal: controller.signal,
         });
 
-        if (!res.ok || !res.body) {
-          setStatus('error');
-          return;
-        }
+        if (!res.ok || !res.body) { setStatus('error'); return; }
 
         const reader  = res.body.getReader();
         const decoder = new TextDecoder();
@@ -59,8 +56,8 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
             if (line.startsWith('data: ')) {
               try {
                 const { text } = JSON.parse(line.slice(6));
-                setRaw(prev => prev + text);
-              } catch { /* ignore malformed */ }
+                if (text) setRaw(prev => prev + text);
+              } catch { /* ignore */ }
             }
           }
         }
@@ -70,9 +67,8 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
     })();
 
     return () => { controller.abort(); };
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-scroll while streaming
   useEffect(() => {
     if (status === 'streaming') {
       bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' });
@@ -86,13 +82,16 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
       title,
       content: body,
       config,
-      baseMood: baseMood?.mood ?? 'peaceful',
+      baseMood: baseMood?.mood ?? '😌',
     });
     setSaved(true);
     onSaved(record);
+    // 저장 완료 후 750ms 뒤 자동으로 뷰어 닫기
+    setTimeout(() => onClose(), 750);
   }
 
   const { title, body } = extractTitle(raw);
+  const moodInfo = baseMood ? MOOD_MAP[baseMood.mood] : null;
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white shadow-lg">
@@ -103,10 +102,12 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
           <span>{GENRE_MAP[config.genre].label}</span>
           <span>·</span>
           <span>{ATMOSPHERE_MAP[config.atmosphere].label}</span>
-          {baseMood && (
+          {moodInfo && (
             <>
               <span>·</span>
-              <span>{MOOD_MAP[baseMood.mood].emoji}</span>
+              <span title={`오늘의 기분 "${moodInfo.label}"이 반영됨`}>
+                {moodInfo.emoji}
+              </span>
             </>
           )}
         </div>
@@ -130,7 +131,6 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
         {status === 'streaming' && (
           <span className="inline-block h-4 w-0.5 animate-pulse bg-stone-400" />
         )}
-
         {status === 'error' && (
           <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-500">
             이야기를 불러오는 중 오류가 발생했습니다. 다시 시도해 주세요.
@@ -147,7 +147,7 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
             disabled={saved}
             className={`rounded-xl px-5 py-2 text-sm font-medium transition-all ${
               saved
-                ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                ? 'bg-green-100 text-green-600 cursor-not-allowed'
                 : 'bg-stone-800 text-white hover:bg-stone-700 active:scale-95'
             }`}
           >
