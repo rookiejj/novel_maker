@@ -224,7 +224,7 @@ export async function loadNovels(seriesId?: string): Promise<NovelRecord[]> {
 
 export async function saveNovel(novel: NovelRecord): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
-  await supabase.from('novels').upsert({
+  const { error } = await supabase.from('novels').upsert({
     id:         novel.id,
     user_id,
     series_id:  novel.seriesId,
@@ -234,6 +234,10 @@ export async function saveNovel(novel: NovelRecord): Promise<void> {
     base_mood:  novel.baseMood,
     created_at: novel.createdAt,
   });
+  if (error) {
+    console.error('[saveNovel] Supabase error:', error);
+    throw error;
+  }
 }
 
 export async function deleteNovel(id: string): Promise<void> {

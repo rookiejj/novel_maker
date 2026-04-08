@@ -73,7 +73,11 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
   }, [raw, status]);
 
   async function handleSave() {
-    if (saved || !raw.trim()) return;
+    console.log('[handleSave] called. saved:', saved, 'raw length:', raw.length, 'raw preview:', raw.slice(0, 50));
+    if (saved || !raw.trim()) {
+      console.log('[handleSave] early return — saved:', saved, 'raw empty:', !raw.trim());
+      return;
+    }
     const { title, body } = extractTitle(raw);
     setSaved(true);
     try {
