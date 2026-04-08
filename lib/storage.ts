@@ -139,7 +139,6 @@ export const novelStorage = {
       createdAt: Date.now(),
     };
     saveNovel(record);
-    incrementEpisodeCount(seriesId);
     return record;
   },
   loadAll: loadAllNovels,

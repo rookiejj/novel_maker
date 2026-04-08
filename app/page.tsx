@@ -12,7 +12,7 @@ import SeriesPickerModal from '@/components/novel/SeriesPickerModal';
 import {
   getTodayMood, loadMoodHistory,
   loadNovels, deleteNovel,
-  loadAllSeries, saveSeries, saveActiveSeriesId, loadActiveSeriesId,
+  loadAllSeries, saveSeries, saveActiveSeriesId, loadActiveSeriesId, incrementEpisodeCount,
   loadWorldBible, saveWorldBible, mergeCharactersIntoWorldBible,
   loadStoryBibles, saveStoryBible, updateSeriesTitle,
 } from '@/lib/storage';
@@ -121,9 +121,16 @@ export default function HomePage() {
     if (pendingNewSeriesRef.current?.id === seriesId) {
       saveSeries(pendingNewSeriesRef.current);
       saveActiveSeriesId(seriesId);
-      setAllSeries(loadAllSeries());
       pendingNewSeriesRef.current = null;
     }
+
+    // 시리즈 존재가 보장된 후 episode count 증가
+    incrementEpisodeCount(seriesId);
+
+    // series state 갱신 (episodeCount 포함)
+    const freshSeries = loadAllSeries();
+    setAllSeries(freshSeries);
+    setActiveSeries(freshSeries.find(s => s.id === seriesId) ?? null);
 
     setNovels(loadNovels(seriesId));
 
