@@ -101,7 +101,12 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
             </>
           )}
         </div>
-        <button onClick={onClose} className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors">×</button>
+        <button
+          onClick={onClose}
+          className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors"
+        >
+          ×
+        </button>
       </div>
 
       {/* Content */}
@@ -128,17 +133,29 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
       {status === 'done' && (
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
           <span className="text-xs text-slate-400">{formatDate(Date.now())}</span>
-          <button
-            onClick={handleSave}
-            disabled={saved}
-            className={`rounded-xl px-5 py-2 text-sm font-semibold transition-all ${
-              saved
-                ? 'bg-emerald-100 text-emerald-600 cursor-not-allowed'
-                : 'bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.98]'
-            }`}
-          >
-            {saved ? '저장됨 ✓' : '저장하기'}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 취소하기 — 저장하지 않고 닫기 */}
+            {!saved && (
+              <button
+                onClick={onClose}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-400
+                           border border-slate-200 hover:bg-slate-50 transition-colors"
+              >
+                취소
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saved}
+              className={`rounded-xl px-5 py-2 text-sm font-semibold transition-all ${
+                saved
+                  ? 'bg-emerald-100 text-emerald-600 cursor-not-allowed'
+                  : 'bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.98]'
+              }`}
+            >
+              {saved ? '저장됨 ✓' : '저장하기'}
+            </button>
+          </div>
         </div>
       )}
     </div>

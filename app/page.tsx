@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from '@/components/layout/Header';
 import MoodSelector from '@/components/mood/MoodSelector';
 import MoodHistory from '@/components/mood/MoodHistory';
@@ -29,15 +29,20 @@ import TwEmoji from '@/components/ui/TwEmoji';
 type Step = 'home' | 'wizard' | 'viewing';
 
 export default function HomePage() {
-  const [todayMood,     setTodayMood]     = useState<MoodEntry | null>(null);
-  const [moodHistory,   setMoodHistory]   = useState<MoodEntry[]>([]);
-  const [allSeries,     setAllSeries]     = useState<Series[]>([]);
-  const [activeSeries,  setActiveSeries]  = useState<Series | null>(null);
+  const [todayMood,        setTodayMood]        = useState<MoodEntry | null>(null);
+  const [moodHistory,      setMoodHistory]      = useState<MoodEntry[]>([]);
+  const [allSeries,        setAllSeries]        = useState<Series[]>([]);
+  const [activeSeries,     setActiveSeries]     = useState<Series | null>(null);
   const [showSeriesPicker, setShowSeriesPicker] = useState(false);
-  const [step,          setStep]          = useState<Step>('home');
-  const [currentConfig, setCurrentConfig] = useState<NovelConfig | null>(null);
-  const [novels,        setNovels]        = useState<NovelRecord[]>([]);
-  const [readingNovel,  setReadingNovel]  = useState<NovelRecord | null>(null);
+  const [step,             setStep]             = useState<Step>('home');
+  const [currentConfig,    setCurrentConfig]    = useState<NovelConfig | null>(null);
+  const [novels,           setNovels]           = useState<NovelRecord[]>([]);
+  const [readingNovel,     setReadingNovel]     = useState<NovelRecord | null>(null);
+
+  // 아직 저장되지 않은 새 시리즈 — 소설이 실제로 저장될 때만 storage에 쓴다
+  const pendingNewSeriesRef = useRef<Series | null>(null);
+  // viewer를 열기 전 활성 시리즈 (취소 시 복원용)
+  const prevActiveSeriesRef = useRef<Series | null>(null);
 
   useEffect(() => {
     setTodayMood(getTodayMood());
@@ -69,9 +74,12 @@ export default function HomePage() {
   }
 
   function handleWizardComplete(options: NovelOptions) {
+    prevActiveSeriesRef.current = activeSeries; // 취소 시 복원용으로 보관
+
     let series = activeSeries;
 
     if (!series) {
+      // ★ 새 시리즈는 아직 storage에 저장하지 않는다 — ref에만 보관
       const newSeries: Series = {
         id:              generateId(),
         title:           `${options.genre} 연재`,
@@ -80,10 +88,8 @@ export default function HomePage() {
         episodeCount:    0,
         createdAt:       Date.now(),
       };
-      saveSeries(newSeries);
-      saveActiveSeriesId(newSeries.id);
-      setAllSeries(loadAllSeries());
-      setActiveSeries(newSeries);
+      pendingNewSeriesRef.current = newSeries;
+      setActiveSeries(newSeries); // UI 표시용으로만 state 반영
       setNovels([]);
       series = newSeries;
     }
@@ -98,8 +104,31 @@ export default function HomePage() {
     setStep('viewing');
   }
 
+  // ── 저장 없이 뷰어 닫기 ──────────────────────────────────────────────────
+  function handleViewerClose() {
+    if (pendingNewSeriesRef.current) {
+      // 저장되지 않은 새 시리즈였으면 이전 상태로 복원
+      setActiveSeries(prevActiveSeriesRef.current);
+      setNovels(prevActiveSeriesRef.current
+        ? loadNovels(prevActiveSeriesRef.current.id)
+        : []);
+      pendingNewSeriesRef.current = null;
+    }
+    setStep('home');
+  }
+
+  // ── 소설 저장 후 콜백 ────────────────────────────────────────────────────
   async function handleNovelSaved(record: NovelRecord) {
     const seriesId = record.seriesId;
+
+    // ★ 이 시점에 비로소 새 시리즈를 storage에 저장
+    if (pendingNewSeriesRef.current?.id === seriesId) {
+      saveSeries(pendingNewSeriesRef.current);
+      saveActiveSeriesId(seriesId);
+      setAllSeries(loadAllSeries());
+      pendingNewSeriesRef.current = null;
+    }
+
     setNovels(loadNovels(seriesId));
 
     const worldBible   = loadWorldBible(seriesId);
@@ -122,8 +151,10 @@ export default function HomePage() {
       if (res.ok) {
         const { storyBible, worldBible: newWB, newCharacterProfiles, suggestedSeriesTitle } =
           await res.json() as {
-            storyBible: StoryBibleEntry; worldBible: WorldBible | null;
-            newCharacterProfiles: WorldBible['characters']; suggestedSeriesTitle: string | null;
+            storyBible:           StoryBibleEntry;
+            worldBible:           WorldBible | null;
+            newCharacterProfiles: WorldBible['characters'];
+            suggestedSeriesTitle: string | null;
           };
 
         saveStoryBible(storyBible);
@@ -164,10 +195,9 @@ export default function HomePage() {
 
       <main className="max-w-xl mx-auto px-4 py-8 space-y-8">
 
-        {/* ── 시리즈 + 생성 버튼 (상단) ────────────────────────── */}
+        {/* ── 시리즈 + 생성 (상단) ─────────────────────────────── */}
         {step === 'home' && (
           <section className="space-y-3">
-            {/* 상단: 다른 시리즈 / 새 시리즈 버튼 */}
             <div className="flex gap-2">
               {allSeries.length > 0 && (
                 <button
@@ -184,7 +214,6 @@ export default function HomePage() {
                 disabled={!todayMood}
                 onClick={() => {
                   setActiveSeries(null);
-                  saveActiveSeriesId(null);
                   setNovels([]);
                   setStep('wizard');
                 }}
@@ -196,7 +225,6 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* 하단: 활성 시리즈 카드 */}
             {activeSeries ? (
               <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
@@ -218,7 +246,6 @@ export default function HomePage() {
                     연재 중
                   </span>
                 </div>
-
                 <button
                   disabled={!todayMood}
                   onClick={() => setStep('wizard')}
@@ -256,7 +283,7 @@ export default function HomePage() {
             recentMoods={recentMoods}
             baseMood={baseMood}
             onSaved={handleNovelSaved}
-            onClose={() => setStep('home')}
+            onClose={handleViewerClose}
           />
         )}
 
@@ -282,16 +309,20 @@ export default function HomePage() {
         {novels.length > 0 && (
           <section>
             <h2 className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest mb-3">
-              {activeSeries ? `${activeSeries.title}` : '지난 이야기'}
+              {activeSeries?.title ?? '지난 이야기'}
             </h2>
             <div className="space-y-3">
               {novels.map(novel => (
-                <NovelCard key={novel.id} novel={novel} onRead={setReadingNovel} onDelete={handleDelete} />
+                <NovelCard
+                  key={novel.id}
+                  novel={novel}
+                  onRead={setReadingNovel}
+                  onDelete={handleDelete}
+                />
               ))}
             </div>
           </section>
         )}
-
       </main>
 
       {showSeriesPicker && (
