@@ -8,6 +8,7 @@ const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스
 const ATMOSPHERES: Atmosphere[] = ['따뜻한', '서늘한', '몽환적인', '긴장감 있는', '유쾌한', '슬픈', '잔잔한'];
 const STYLES: WritingStyle[]    = ['간결한 문체', '서정적 문체', '대화 중심', '묘사 중심'];
 const LENGTHS: NovelLength[]    = ['단편 (500자)', '중편 (1500자)', '장편 (3000자)'];
+const SERIES_LENGTHS: SeriesLength[] = [10, 20, 30];
 
 const GENRE_EMOJI: Record<Genre, string> = {
   '로맨스': '💕', 'SF': '🚀', '판타지': '🔮', '공포': '👻',
@@ -32,7 +33,7 @@ export default function NovelWizard({
   const [style,           setStyle]           = useState<WritingStyle>(lastOptions?.style ?? '서정적 문체');
   const [length,          setLength]          = useState<NovelLength>(lastOptions?.length ?? '중편 (1500자)');
   const [protagonistName, setProtagonistName] = useState('');
-  const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(20);
+  const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(10);
   const [gender,          setGender]          = useState<ProtagGender | null>('중성');
 
   const isNewSeries = !lockedGenre;
@@ -136,7 +137,7 @@ export default function NovelWizard({
             <span className="ml-1.5 text-slate-400 font-normal">(설정 후 변경 불가)</span>
           </label>
           <div className="flex gap-3">
-            {([20, 30] as SeriesLength[]).map(n => (
+            {SERIES_LENGTHS.map(n => (
               <button
                 key={n}
                 onClick={() => setTotalEpisodes(n)}

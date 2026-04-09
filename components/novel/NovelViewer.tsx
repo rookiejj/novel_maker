@@ -22,12 +22,62 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
   const [status, setStatus] = useState<Status>('streaming');
   const [saved,  setSaved]  = useState(false);
   const bodyRef  = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
+
+  // ─── 부드러운 스트리밍 버퍼 ───────────────────────────────────────────────
+  //
+  // 문제: Anthropic SSE 청크는 크기·간격이 들쑥날쑥해 곧바로 setRaw에 붙이면
+  //       "멈춤 → 뭉텅이 → 멈춤"이 반복되며 끊기는 느낌을 준다.
+  //
+  // 해결: 수신 텍스트를 pendingBufferRef에 쌓고, requestAnimationFrame 루프에서
+  //       매 프레임마다 고정량씩 꺼내 setRaw로 흘려보낸다.
+  //       적응형 속도: 버퍼가 클수록 더 많이 꺼내 따라잡는다.
+  //       (perFrame = max(2, ceil(pending / 30)) — 60fps 기준 기본 초당 ~120자)
+  //
+  //       서버 `event: done`을 받아도 즉시 status='done'으로 전이하지 않고
+  //       streamDoneRef만 세운다. rAF가 버퍼를 모두 비운 뒤에야 'done'으로 바뀌어
+  //       "마지막 문장이 뚝 나타나고 바로 저장 버튼" 현상을 방지한다.
+  //
+  // ★ Strict Mode 안전성:
+  //   rAF 루프와 fetch 스트리밍을 "하나의 useEffect"로 묶고, effect 진입 시점에
+  //   pendingBufferRef / streamDoneRef를 명시적으로 리셋한다. 두 로직이 같은
+  //   생명주기를 공유하므로 개발 모드 이중 실행에서도 상태가 꼬이지 않는다.
+  // ------------------------------------------------------------------------
+  const pendingBufferRef = useRef<string>('');
+  const streamDoneRef    = useRef<boolean>(false);
 
   useEffect(() => {
-    const controller = new AbortController();
-    abortRef.current = controller;
+    // ★ 이전 run의 잔존 상태 제거 — Strict Mode 이중 실행 대응
+    pendingBufferRef.current = '';
+    streamDoneRef.current    = false;
 
+    const controller = new AbortController();
+    let rafId: number | null = null;
+    let cancelled = false;
+
+    // rAF 타자기 루프
+    const tick = () => {
+      if (cancelled) return;
+
+      const pending = pendingBufferRef.current;
+
+      if (pending.length > 0) {
+        // 적응형: 버퍼가 크면 빠르게 따라잡음. 최소 2자/프레임.
+        const perFrame = Math.max(2, Math.ceil(pending.length / 30));
+        const chunk    = pending.slice(0, perFrame);
+        pendingBufferRef.current = pending.slice(perFrame);
+        setRaw(prev => prev + chunk);
+      } else if (streamDoneRef.current) {
+        // 버퍼 비었고 서버 스트리밍 종료됨 → 완료 전이, 루프 정지
+        setStatus(prev => (prev === 'error' ? prev : 'done'));
+        rafId = null;
+        return;
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    // SSE fetch
     (async () => {
       try {
         const res = await fetch('/api/novel', {
@@ -36,7 +86,11 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
           body: JSON.stringify({ config, recentMoods }),
           signal: controller.signal,
         });
-        if (!res.ok || !res.body) { setStatus('error'); return; }
+        if (!res.ok || !res.body) {
+          setStatus('error');
+          streamDoneRef.current = true;
+          return;
+        }
 
         const reader  = res.body.getReader();
         const decoder = new TextDecoder();
@@ -49,22 +103,42 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
           const lines = buffer.split('\n');
           buffer = lines.pop() ?? '';
           for (const line of lines) {
-            if (line.startsWith('event: done'))  { setStatus('done'); }
-            if (line.startsWith('event: error')) { setStatus('error'); }
+            if (line.startsWith('event: done')) {
+              // 서버 종료 신호 — 상태 전이는 rAF가 버퍼를 비운 뒤 담당
+              streamDoneRef.current = true;
+            }
+            if (line.startsWith('event: error')) {
+              setStatus('error');
+              streamDoneRef.current = true;
+            }
             if (line.startsWith('data: ')) {
               try {
                 const { text } = JSON.parse(line.slice(6));
-                if (text) setRaw(prev => prev + text);
+                // ★ setRaw를 직접 호출하지 않고 버퍼에만 쌓는다
+                if (text) pendingBufferRef.current += text;
               } catch { /* ignore */ }
             }
           }
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') setStatus('error');
+        if ((err as Error).name !== 'AbortError') {
+          setStatus('error');
+          streamDoneRef.current = true;
+        }
       }
     })();
 
-    return () => { controller.abort(); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      // 주의: streamDoneRef/pendingBufferRef는 여기서 건드리지 않는다.
+      //       다음 effect 진입부에서 리셋하므로 Strict Mode 이중 실행에
+      //       영향 없음.
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -77,7 +151,7 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
     const { title, body } = extractTitle(raw);
     setSaved(true);
     try {
-      // 1) Supabase에 소설 저장 — 이 단계가 성공해야 아래로 진행
+      // 1) Supabase에 소설 저장
       const record = await novelStorage.save({
         title,
         content: body,
@@ -85,14 +159,9 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
         baseMood: baseMood?.mood ?? '😌',
       });
 
-      // 2) 부모(HomeView.handleNovelSaved)에 알림.
-      //    handleNovelSaved는 이제 "동기적 최소 작업(롤백 플래그 해제 + 낙관적 목록 갱신)"만
-      //    수행하고 무거운 DB/LLM 후처리는 자체적으로 백그라운드에 던진다.
-      //    따라서 이 await는 실질적으로 수 ms 안에 끝나며, 뷰어는 곧바로 닫힌다.
-      //
-      //    ★ 순서가 중요하다: onSaved → onClose.
-      //    반대로 하면 새 시리즈의 첫 화 저장 시 HomeView가 pending 플래그를
-      //    해제할 틈 없이 handleViewerClose가 돌아 시리즈가 롤백(삭제)된다.
+      // 2) 부모(HomeView.handleNovelSaved)는 동기적 최소 작업만 수행 후 즉시 리턴.
+      //    ★ 순서 중요: onSaved → onClose. 반대로 하면 새 시리즈 첫 화에서
+      //    시리즈가 롤백(삭제)된다.
       await onSaved(record);
       onClose();
     } catch (err) {

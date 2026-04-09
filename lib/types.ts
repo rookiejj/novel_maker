@@ -61,7 +61,7 @@ export type WritingStyle =
 export type NovelLength =
   | '단편 (500자)' | '중편 (1500자)' | '장편 (3000자)';
 
-export type SeriesLength = 20 | 30;
+export type SeriesLength = 10 | 20 | 30;
 
 export type ProtagGender = '남성' | '여성' | '중성';
 
