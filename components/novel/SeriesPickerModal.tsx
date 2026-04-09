@@ -3,6 +3,7 @@
 import type { Series } from '@/lib/types';
 import { GENRE_MAP } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
+import { useModalBackDismiss } from '@/lib/useModalBackDismiss';
 
 interface Props {
   series:       Series[];
@@ -12,10 +13,14 @@ interface Props {
 }
 
 export default function SeriesPickerModal({ series, activeId, onSelect, onClose }: Props) {
+  // 뒤로 가기 가로채기 + body 스크롤 잠금
+  const dismiss = useModalBackDismiss(onClose);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end justify-center
+                 bg-slate-900/50 backdrop-blur-sm"
+      onClick={dismiss}
     >
       <div
         className="w-full max-w-xl rounded-t-3xl bg-white pb-8 pt-3 shadow-2xl"
@@ -29,10 +34,11 @@ export default function SeriesPickerModal({ series, activeId, onSelect, onClose 
             시리즈 선택
           </h2>
 
-          <div className="space-y-2 max-h-72 overflow-y-auto">
+          {/* overscroll-contain: 리스트 스크롤 끝에 도달해도 스크롤 이벤트가
+              전파되지 않게 방지 (백업 방어선).
+              주된 방어는 훅이 잠근 body overflow:hidden. */}
+          <div className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
             {series.map(s => {
-              // 완결 여부 판정: episodeCount가 totalEpisodes에 도달했는가.
-              // 홈 화면의 시리즈 카드와 동일한 기준을 적용해 일관성 유지.
               const isComplete = s.episodeCount >= s.totalEpisodes;
               const isActive   = s.id === activeId;
 
