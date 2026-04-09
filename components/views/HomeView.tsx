@@ -105,6 +105,23 @@ export default function HomeView({ isAuthenticated }: Props) {
     })();
   }, [isAuthenticated]);
 
+  // ─── 위저드 → 뷰어 전환 시 상단으로 자동 스크롤 ─────────────────────────
+  // NovelViewer는 높이가 그리 크지 않아, 페이지 아래에서 "이야기 만들기"를
+  // 누르면 뷰어가 화면 밖에 렌더되어 사용자가 당황한다. step이 'viewing'이
+  // 되는 순간 페이지를 최상단으로 올린다.
+  //
+  // requestAnimationFrame을 쓰는 이유: setStep 이후 이 effect가 도는 시점은
+  // 이미 커밋 후이긴 하지만, 레이아웃/페인트가 완료되기 전에 scrollTo를 부르면
+  // 브라우저에 따라 무시되거나 부정확할 수 있다. rAF 한 번이면 다음 페인트
+  // 직전에 실행되어 안전.
+  useEffect(() => {
+    if (step !== 'viewing') return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [step]);
+
   // ─── 일러스트 상태 폴링 ────────────────────────────────────────────────────
   // novels 중에 illustrationStatus가 pending 또는 generating인 항목이 있으면
   // 4초마다 novels를 새로 읽어 상태 변화를 감지한다.

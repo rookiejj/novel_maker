@@ -174,8 +174,9 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-brand-100 bg-white shadow-lg overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+      {/* Toolbar — 하단에 취소/저장하기 버튼이 이미 있으므로 상단 × 아이콘은 생략.
+          사용자는 취소 버튼으로 명확하게 나갈 수 있다. */}
+      <div className="flex items-center border-b border-slate-100 px-5 py-3">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <TwEmoji emoji={GENRE_MAP[config.genre].icon} size={14} />
           <span className="font-medium">{GENRE_MAP[config.genre].label}</span>
@@ -189,12 +190,6 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
             </>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors"
-        >
-          ×
-        </button>
       </div>
 
       {/* Content */}

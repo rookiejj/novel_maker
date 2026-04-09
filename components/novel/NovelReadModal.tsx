@@ -20,34 +20,37 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
     novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
   const isFailed = novel.illustrationStatus === 'failed';
 
+  // 모달 콘텐츠 영역 클릭 시에도 닫히도록.
+  // 단, 아래 조건에서는 닫지 않음:
+  //   - 텍스트가 드래그 선택된 상태 (사용자가 복사 중일 수 있음)
+  //   - 내부 버튼(재시도 등)은 별도 stopPropagation으로 이미 격리
+  const handleContentClick = () => {
+    if (typeof window !== 'undefined') {
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        return; // 선택된 텍스트가 있으면 닫지 않음
+      }
+    }
+    dismiss();
+  };
+
   // 구조
   // ────
   // · Backdrop (fixed inset-0, flex center): 스크롤 컨테이너가 아님.
-  //   오직 고정된 어두운 덮개 + 중앙 정렬 역할만.
-  // · 모달 콘텐츠: max-h로 높이 제한 + 내부에 스크롤 컨테이너를 가짐.
-  //   → 스크롤은 오직 모달 본문 영역에서만 발생.
-  // · body 스크롤은 훅이 잠가둠 → 마우스를 모달 바깥에 놓아도 뒤 화면 안 움직임.
-  //
-  // 높이 계산 (모바일 대응)
-  // ─────────────────────
-  // · 100vh는 iOS Safari/모바일 Chrome에서 주소창 포함한 "큰" 뷰포트 기준이라
-  //   실제 가시 영역보다 크다. 그대로 쓰면 모달 하단이 화면 밖으로 잘림.
-  // · 100dvh(dynamic viewport height)는 브라우저 UI를 제외한 실제 가시 영역.
-  //   iOS 15.4+ / Chrome 108+ / Samsung Internet 최신 지원.
-  // · 구형 브라우저 fallback을 위해 vh를 먼저, dvh를 뒤에 선언 — 지원 시 dvh가
-  //   cascade로 덮어쓴다.
-  // · backdrop 패딩은 pt-16(4rem) 상단 + p-4(1rem) 하단 = 5rem.
-  //   모달 max-h에서도 동일하게 5rem을 빼야 패딩과 합쳐 화면을 넘지 않음.
+  //   클릭 → dismiss. body 스크롤은 훅이 잠금.
+  // · 모달 콘텐츠: .modal-max-h로 높이 제한 + 내부에 스크롤 컨테이너.
+  //   클릭 → handleContentClick (선택된 텍스트 있으면 유지, 없으면 dismiss).
+  // · 내부 버튼(×, 재시도)은 stopPropagation으로 닫기 동작 차단.
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center
-                 bg-slate-900/60 p-4 pt-16 backdrop-blur-sm"
+                 bg-slate-900/60 p-4 pt-8 backdrop-blur-sm"
       onClick={dismiss}
     >
       <div
         className="modal-max-h flex w-full max-w-xl flex-col
                    rounded-3xl border border-brand-100 bg-white shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        onClick={handleContentClick}
       >
         {/* 헤더 (고정) */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3 shrink-0">
@@ -61,10 +64,15 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
             <span>·</span>
             <span>{formatDate(novel.createdAt)}</span>
           </div>
-          <button onClick={dismiss} className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors">×</button>
+          <button
+            onClick={e => { e.stopPropagation(); dismiss(); }}
+            className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors"
+          >
+            ×
+          </button>
         </div>
 
-        {/* 스크롤 컨테이너: 일러스트 + 본문이 이 안에서만 스크롤됨 */}
+        {/* 스크롤 컨테이너 */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
           {/* 일러스트 */}
           {(hasIllustration || isGenerating || isFailed) && (
@@ -92,7 +100,7 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
                     <p className="text-xs text-rose-400">일러스트 생성에 실패했어요</p>
                     {onRetryIllustration && (
                       <button
-                        onClick={() => onRetryIllustration(novel.id)}
+                        onClick={e => { e.stopPropagation(); onRetryIllustration(novel.id); }}
                         className="rounded-xl bg-white border border-rose-200 px-4 py-2
                                    text-xs font-semibold text-rose-500 hover:bg-rose-50
                                    active:scale-[0.98] transition-all shadow-sm"
