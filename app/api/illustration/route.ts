@@ -157,7 +157,8 @@ async function generateImagePrompt(params: {
   content: string;
   config: NovelConfig;
 }): Promise<string> {
-  const system = buildIllustrationSystemPrompt();
+  // 장르에 따라 스타일 키워드가 달라진다 (동화는 수채화 그림책 톤).
+  const system = buildIllustrationSystemPrompt(params.config.genre);
   const userMsg = buildIllustrationUserMessage(params);
 
   const msg = await anthropic.messages.create({

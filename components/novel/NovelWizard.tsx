@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender, SeriesLastOptions } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
 
-const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사'];
+const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사', '동화'];
 const ATMOSPHERES: Atmosphere[] = ['따뜻한', '서늘한', '몽환적인', '긴장감 있는', '유쾌한', '슬픈', '잔잔한'];
 const STYLES: WritingStyle[]    = ['간결한 문체', '서정적 문체', '대화 중심', '묘사 중심'];
 const LENGTHS: NovelLength[]    = ['단편 (500자)', '중편 (1500자)', '장편 (3000자)'];
@@ -13,6 +13,7 @@ const SERIES_LENGTHS: SeriesLength[] = [10, 20, 30];
 const GENRE_EMOJI: Record<Genre, string> = {
   '로맨스': '💕', 'SF': '🚀', '판타지': '🔮', '공포': '👻',
   '미스터리': '🔍', '일상': '☕', '성장': '🌱', '역사': '📜',
+  '동화': '🧸',
 };
 
 interface Props {
@@ -56,8 +57,7 @@ export default function NovelWizard({
           그룹 1 — 시리즈 설정
           ──────────────────
           - 새 시리즈: 카드 전체를 편집 가능한 필드들로 구성
-          - 기존 시리즈: 한 줄 요약 배지 하나로 압축. 이어쓰기 때마다 같은
-            정보를 큰 카드로 반복 노출하는 것은 공간 낭비.
+          - 기존 시리즈: 한 줄 요약 배지 하나로 압축.
       ═══════════════════════════════════════════════════════════════════ */}
       {isNewSeries ? (
         <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-5 space-y-4">
@@ -179,7 +179,6 @@ export default function NovelWizard({
           그룹 2 — 이번 편 설정
           ────────────────────
           편마다 자유롭게 바꿀 수 있는 값들. 분위기, 필체, 분량.
-          항상 편집 가능. 배경: 흰색 (시리즈 카드와 대비).
       ═══════════════════════════════════════════════════════════════════ */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
         <div>

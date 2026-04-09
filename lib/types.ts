@@ -49,7 +49,7 @@ export interface MoodRecord {
 
 export type Genre =
   | '로맨스' | 'SF' | '판타지' | '공포'
-  | '미스터리' | '일상' | '성장' | '역사';
+  | '미스터리' | '일상' | '성장' | '역사' | '동화';
 
 export type Atmosphere =
   | '따뜻한' | '서늘한' | '몽환적인' | '긴장감 있는'
@@ -74,6 +74,7 @@ export const GENRE_MAP: Record<Genre, { icon: string; label: string }> = {
   '일상':     { icon: '☕', label: '일상'     },
   '성장':     { icon: '🌱', label: '성장'     },
   '역사':     { icon: '📜', label: '역사'     },
+  '동화':     { icon: '🧸', label: '동화'     },
 };
 
 export const ATMOSPHERE_MAP: Record<Atmosphere, { label: string }> = {
