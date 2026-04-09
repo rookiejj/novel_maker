@@ -227,6 +227,32 @@ export default function HomeView({ isAuthenticated }: Props) {
     setStep('home');
   }
 
+  // 위저드 취소 — "새 시리즈" 버튼을 누를 때 activeSeries를 null로 비워두는데,
+  // 취소로 돌아올 때 이것을 복원하지 않으면 기존 시리즈가 있어도 홈 화면에
+  // 빈 상태("첫 번째 시리즈를 시작해보세요")가 표시된다.
+  // prevActiveSeriesRef에 저장해둔 이전 활성 시리즈로 되돌린다.
+  //
+  // "새 시리즈"가 아니라 "이어쓰기"로 위저드에 진입한 경우엔 activeSeries가
+  // 건드려지지 않았고 prevActiveSeriesRef도 비어있으므로 복원 로직이 no-op.
+  function handleWizardCancel() {
+    const prev = prevActiveSeriesRef.current;
+    if (prev) {
+      // 동기적으로 먼저 복원해 빈 플레이스홀더가 잠시라도 노출되지 않도록 함
+      setActiveSeries(prev);
+      prevActiveSeriesRef.current = null;
+      // novels는 백그라운드로 재로드
+      void (async () => {
+        try {
+          setNovels(await loadNovels(prev.id));
+          await saveActiveSeriesId(prev.id);
+        } catch (err) {
+          console.warn('[handleWizardCancel] novels 재로드 실패:', err);
+        }
+      })();
+    }
+    setStep('home');
+  }
+
   async function handleWizardComplete(options: NovelOptions) {
     let series = activeSeries;
 
@@ -626,7 +652,7 @@ export default function HomeView({ isAuthenticated }: Props) {
             lockedTotalEpisodes={activeSeries?.totalEpisodes}
             lastOptions={activeSeries?.lastOptions}
             onGenerate={handleWizardComplete}
-            onCancel={() => setStep('home')}
+            onCancel={handleWizardCancel}
           />
         )}
 

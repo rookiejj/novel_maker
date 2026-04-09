@@ -47,154 +47,183 @@ export default function NovelWizard({
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       <h2 className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest">
         이야기 설정
       </h2>
 
-      {/* 장르 */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-slate-500">장르</label>
-          {lockedGenre && (
-            <span className="text-[11px] font-medium text-brand-400 bg-brand-50 px-2 py-0.5 rounded-full">
-              🔒 연재 고정
+      {/* ═══════════════════════════════════════════════════════════════════
+          그룹 1 — 시리즈 설정
+          ──────────────────
+          - 새 시리즈: 카드 전체를 편집 가능한 필드들로 구성
+          - 기존 시리즈: 한 줄 요약 배지 하나로 압축. 이어쓰기 때마다 같은
+            정보를 큰 카드로 반복 노출하는 것은 공간 낭비.
+      ═══════════════════════════════════════════════════════════════════ */}
+      {isNewSeries ? (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-brand-700 flex items-center gap-1.5">
+              <span>📘</span>시리즈 설정
+            </h3>
+            <p className="text-[11px] text-brand-400 mt-0.5">
+              한 번 정하면 연재 내내 유지돼요
+            </p>
+          </div>
+
+          {/* 장르 */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">장르</label>
+            <div className="flex flex-wrap gap-2">
+              {GENRES.map(g => (
+                <button key={g} onClick={() => setGenre(g)}
+                  className={`${chip(genre === g)} flex items-center gap-1.5`}>
+                  <TwEmoji emoji={GENRE_EMOJI[g]} size={13} />{g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 주인공 이름 */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">
+              주인공 이름
+              <span className="ml-1.5 text-slate-400 font-normal">(선택)</span>
+            </label>
+            <input
+              type="text"
+              value={protagonistName}
+              onChange={e => setProtagonistName(e.target.value)}
+              placeholder="비워두면 AI가 자유롭게 설정해요"
+              maxLength={20}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm
+                         text-slate-800 placeholder:text-slate-300
+                         focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+
+          {/* 주인공 성별 */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">
+              주인공 성별
+              <span className="ml-1.5 text-rose-400 font-semibold">*</span>
+            </label>
+            <div className="flex gap-2">
+              {(['남성', '여성', '중성'] as ProtagGender[]).map(g => (
+                <button
+                  key={g}
+                  onClick={() => setGender(g)}
+                  className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                    gender === g
+                      ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                  }`}
+                >
+                  {g === '남성' ? '👦 남성' : g === '여성' ? '👧 여성' : '🧑 중성'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 총 편수 */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">시리즈 총 편수</label>
+            <div className="flex gap-3">
+              {SERIES_LENGTHS.map(n => (
+                <button
+                  key={n}
+                  onClick={() => setTotalEpisodes(n)}
+                  className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                    totalEpisodes === n
+                      ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                  }`}
+                >
+                  {n}편
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              선택한 편수에 맞게 기·승·전·결 구조로 이야기가 자동으로 전개되고, 마지막 편에서 자연스럽게 완결됩니다.
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* 기존 시리즈 — 한 줄 요약 (새 시리즈 카드와 동일한 헤더 스타일 유지) */
+        <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-brand-700 flex items-center gap-1.5">
+              <span>📘</span>시리즈 설정
+            </h3>
+            <p className="text-[11px] text-brand-400 mt-0.5">
+              이 시리즈의 고정 설정
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl bg-white border border-brand-100
+                          px-4 py-2.5 text-xs">
+            <TwEmoji emoji={GENRE_EMOJI[lockedGenre!]} size={13} />
+            <span className="font-semibold text-brand-700">{lockedGenre}</span>
+            <span className="text-brand-300">·</span>
+            <span className="text-brand-600">
+              {lockedProtagonistName
+                ? <>{lockedProtagonistName}<span className="text-brand-400">({lockedGender})</span></>
+                : <span className="text-brand-500">{lockedGender}</span>}
             </span>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {GENRES.map(g => (
-            <button key={g} disabled={!!lockedGenre} onClick={() => setGenre(g)}
-              className={`${chip(genre === g)} flex items-center gap-1.5 ${lockedGenre ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              <TwEmoji emoji={GENRE_EMOJI[g]} size={13} />{g}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 주인공 이름 */}
-      {isNewSeries ? (
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-500">
-            주인공 이름
-            <span className="ml-1.5 text-slate-400 font-normal">(선택 · 설정 후 변경 불가)</span>
-          </label>
-          <input
-            type="text"
-            value={protagonistName}
-            onChange={e => setProtagonistName(e.target.value)}
-            placeholder="비워두면 AI가 자유롭게 설정해요"
-            maxLength={20}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm
-                       text-slate-800 placeholder:text-slate-300
-                       focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-          />
-        </div>
-      ) : lockedProtagonistName ? (
-        <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
-          <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">주인공</p>
-          <p className="text-sm font-semibold text-brand-700">{lockedProtagonistName}</p>
-        </div>
-      ) : null}
-
-
-      {/* 성별 — 새 시리즈: 필수 선택 / 기존 시리즈: 잠금 표시 */}
-      {isNewSeries ? (
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-500">
-            주인공 성별
-            <span className="ml-1.5 text-rose-400 font-semibold">*</span>
-            <span className="ml-1 text-slate-400 font-normal">(필수 · 설정 후 변경 불가)</span>
-          </label>
-          <div className="flex gap-2">
-            {(['남성', '여성', '중성'] as ProtagGender[]).map(g => (
-              <button
-                key={g}
-                onClick={() => setGender(g)}
-                className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  gender === g
-                    ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
-                }`}
-              >
-                {g === '남성' ? '👦 남성' : g === '여성' ? '👧 여성' : '🧑 중성'}
-              </button>
-            ))}
+            <span className="text-brand-300">·</span>
+            <span className="text-brand-600">총 {lockedTotalEpisodes}편</span>
           </div>
         </div>
-      ) : lockedGender ? (
-        <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
-          <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">주인공 성별</p>
-          <p className="text-sm font-semibold text-brand-700">{lockedGender}</p>
-        </div>
-      ) : null}
+      )}
 
-      {/* 총 편수 — 새 시리즈에서만 선택 */}
-      {isNewSeries ? (
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-500">
-            시리즈 총 편수
-            <span className="ml-1.5 text-slate-400 font-normal">(설정 후 변경 불가)</span>
-          </label>
-          <div className="flex gap-3">
-            {SERIES_LENGTHS.map(n => (
-              <button
-                key={n}
-                onClick={() => setTotalEpisodes(n)}
-                className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
-                  totalEpisodes === n
-                    ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
-                }`}
-              >
-                {n}편
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            선택한 편수에 맞게 기·승·전·결 구조로 이야기가 자동으로 전개됩니다.
-            마지막 편에서 자연스럽게 완결됩니다.
+      {/* ═══════════════════════════════════════════════════════════════════
+          그룹 2 — 이번 편 설정
+          ────────────────────
+          편마다 자유롭게 바꿀 수 있는 값들. 분위기, 필체, 분량.
+          항상 편집 가능. 배경: 흰색 (시리즈 카드와 대비).
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+            <span>✏️</span>이번 편 설정
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            편마다 자유롭게 바꿀 수 있어요
           </p>
         </div>
-      ) : lockedTotalEpisodes ? (
-        <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
-          <p className="text-[11px] font-semibold text-brand-400 uppercase tracking-widest mb-0.5">시리즈 구성</p>
-          <p className="text-sm font-semibold text-brand-700">총 {lockedTotalEpisodes}편으로 완결</p>
-        </div>
-      ) : null}
 
-      {/* 분위기 */}
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-slate-500">분위기</label>
-        <div className="flex flex-wrap gap-2">
-          {ATMOSPHERES.map(a => (
-            <button key={a} onClick={() => setAtmosphere(a)} className={chip(atmosphere === a)}>{a}</button>
-          ))}
+        {/* 분위기 */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">분위기</label>
+          <div className="flex flex-wrap gap-2">
+            {ATMOSPHERES.map(a => (
+              <button key={a} onClick={() => setAtmosphere(a)} className={chip(atmosphere === a)}>{a}</button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* 필체 */}
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-slate-500">필체</label>
-        <div className="flex flex-wrap gap-2">
-          {STYLES.map(s => (
-            <button key={s} onClick={() => setStyle(s)} className={chip(style === s)}>{s}</button>
-          ))}
+        {/* 필체 */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">필체</label>
+          <div className="flex flex-wrap gap-2">
+            {STYLES.map(s => (
+              <button key={s} onClick={() => setStyle(s)} className={chip(style === s)}>{s}</button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* 분량 */}
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-slate-500">분량</label>
-        <div className="flex flex-wrap gap-2">
-          {LENGTHS.map(l => (
-            <button key={l} onClick={() => setLength(l)} className={chip(length === l)}>{l}</button>
-          ))}
+        {/* 분량 */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">분량</label>
+          <div className="flex flex-wrap gap-2">
+            {LENGTHS.map(l => (
+              <button key={l} onClick={() => setLength(l)} className={chip(length === l)}>{l}</button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* 액션 */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-3 pt-1">
         <button onClick={onCancel}
           className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors">
           취소
