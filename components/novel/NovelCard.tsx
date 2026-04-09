@@ -10,15 +10,17 @@ interface Props {
   novel:    NovelRecord;
   onRead:   (novel: NovelRecord) => void;
   onDelete: (id: string) => void;
+  onRetryIllustration?: (id: string) => void;
 }
 
-export default function NovelCard({ novel, onRead, onDelete }: Props) {
+export default function NovelCard({ novel, onRead, onDelete, onRetryIllustration }: Props) {
   const [confirming, setConfirming] = useState(false);
   const preview = novel.content.slice(0, 100).trim() + (novel.content.length > 100 ? '…' : '');
 
   const hasIllustration = !!novel.illustrationUrl;
   const isGenerating =
     novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
+  const isFailed = novel.illustrationStatus === 'failed';
 
   return (
     <article
@@ -27,7 +29,7 @@ export default function NovelCard({ novel, onRead, onDelete }: Props) {
                  transition-all hover:border-brand-200 hover:shadow-md cursor-pointer"
     >
       {/* 일러스트 썸네일 */}
-      {(hasIllustration || isGenerating) && (
+      {(hasIllustration || isGenerating || isFailed) && (
         <div className="mb-3 overflow-hidden rounded-xl border border-brand-50 bg-brand-50/40 aspect-[4/3]">
           {hasIllustration ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -37,11 +39,33 @@ export default function NovelCard({ novel, onRead, onDelete }: Props) {
               className="h-full w-full object-cover"
               loading="lazy"
             />
-          ) : (
+          ) : isGenerating ? (
             <div className="flex h-full w-full items-center justify-center">
               <div className="flex flex-col items-center gap-2">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
                 <p className="text-[11px] text-brand-400">일러스트 그리는 중…</p>
+              </div>
+            </div>
+          ) : (
+            // failed 상태
+            <div
+              className="flex h-full w-full items-center justify-center bg-rose-50/30"
+              onClick={e => e.stopPropagation()} // 카드 클릭(모달 열기)과 분리
+            >
+              <div className="flex flex-col items-center gap-2 px-4 text-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full
+                                bg-rose-100 text-rose-400 text-base">!</div>
+                <p className="text-[11px] text-rose-400">일러스트 생성에 실패했어요</p>
+                {onRetryIllustration && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onRetryIllustration(novel.id); }}
+                    className="mt-0.5 rounded-lg bg-white border border-rose-200 px-3 py-1
+                               text-[11px] font-semibold text-rose-500 hover:bg-rose-50
+                               active:scale-[0.98] transition-all shadow-sm"
+                  >
+                    ↻ 다시 시도
+                  </button>
+                )}
               </div>
             </div>
           )}

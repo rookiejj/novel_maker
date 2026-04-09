@@ -350,6 +350,54 @@ export default function HomeView({ isAuthenticated }: Props) {
     if (activeSeries) setNovels(await loadNovels(activeSeries.id));
   }
 
+  // ─── 일러스트 재시도 ─────────────────────────────────────────────────────
+  //
+  // /api/illustration은 이미 멱등(idempotent)하게 설계돼 있다:
+  //   - done       → skip
+  //   - generating → skip (동시 호출 방지)
+  //   - failed/pending → 진행 후 상태를 generating → done/failed 로 전이
+  //
+  // 따라서 재시도는 동일 엔드포인트에 novelId만 다시 POST하면 된다.
+  // DB 상태(novels.illustration_status) 전이는 전적으로 서버가 담당한다.
+  // 클라이언트에서는 직접 DB 쓰기를 하지 않는다.
+  //
+  // 흐름:
+  //  1) 로컬 상태를 'pending'으로 낙관적 갱신 → 폴링 useEffect 즉시 재가동
+  //     (spinner가 바로 보임)
+  //  2) /api/illustration POST
+  //     - 성공: 서버가 곧 'done' 또는 'failed'로 전이 → 폴링이 감지해 화면 반영
+  //     - 실패(네트워크 오류 등): 서버는 손대지 않은 상태이거나 catch에서
+  //       'failed'로 되돌려 놨을 수 있음. 안전하게 로컬을 'failed'로 롤백해
+  //       다시 시도 버튼이 재노출되도록 한다.
+  async function handleRetryIllustration(id: string) {
+    // (1) 낙관적 갱신 — novels + readingNovel 모두 동기화
+    const toPending = (n: NovelRecord): NovelRecord =>
+      n.id === id
+        ? { ...n, illustrationStatus: 'pending', illustrationUrl: null }
+        : n;
+
+    setNovels(prev => prev.map(toPending));
+    setReadingNovel(prev => (prev && prev.id === id ? toPending(prev) : prev));
+
+    // (2) 서버 호출
+    try {
+      const res = await fetch('/api/illustration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ novelId: id }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // 성공 시 폴링 useEffect가 4초 주기로 최신 상태를 가져온다.
+    } catch (err) {
+      console.warn('[handleRetryIllustration] 재시도 요청 실패:', err);
+      // 롤백 — 버튼을 다시 보이게 함
+      const toFailed = (n: NovelRecord): NovelRecord =>
+        n.id === id ? { ...n, illustrationStatus: 'failed' } : n;
+      setNovels(prev => prev.map(toFailed));
+      setReadingNovel(prev => (prev && prev.id === id ? toFailed(prev) : prev));
+    }
+  }
+
   const recentMoods: MoodRecord[] = moodHistory
     .slice(0, 7).map((e, i) => ({ id: String(i), date: e.date, mood: e.emoji }));
   const baseMood: MoodRecord | null = todayMood
@@ -514,7 +562,13 @@ export default function HomeView({ isAuthenticated }: Props) {
             </h2>
             <div className="space-y-3">
               {novels.map(novel => (
-                <NovelCard key={novel.id} novel={novel} onRead={setReadingNovel} onDelete={handleDelete} />
+                <NovelCard
+                  key={novel.id}
+                  novel={novel}
+                  onRead={setReadingNovel}
+                  onDelete={handleDelete}
+                  onRetryIllustration={handleRetryIllustration}
+                />
               ))}
             </div>
           </section>
@@ -531,7 +585,11 @@ export default function HomeView({ isAuthenticated }: Props) {
         />
       )}
       {readingNovel && (
-        <NovelReadModal novel={readingNovel} onClose={() => setReadingNovel(null)} />
+        <NovelReadModal
+          novel={readingNovel}
+          onClose={() => setReadingNovel(null)}
+          onRetryIllustration={handleRetryIllustration}
+        />
       )}
     </div>
   );

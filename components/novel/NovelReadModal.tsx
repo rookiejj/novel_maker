@@ -8,12 +8,14 @@ import TwEmoji from '@/components/ui/TwEmoji';
 interface Props {
   novel:   NovelRecord;
   onClose: () => void;
+  onRetryIllustration?: (id: string) => void;
 }
 
-export default function NovelReadModal({ novel, onClose }: Props) {
+export default function NovelReadModal({ novel, onClose, onRetryIllustration }: Props) {
   const hasIllustration = !!novel.illustrationUrl;
   const isGenerating =
     novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
+  const isFailed = novel.illustrationStatus === 'failed';
 
   return (
     <div
@@ -40,7 +42,7 @@ export default function NovelReadModal({ novel, onClose }: Props) {
         </div>
 
         {/* 일러스트 */}
-        {(hasIllustration || isGenerating) && (
+        {(hasIllustration || isGenerating || isFailed) && (
           <div className="bg-brand-50/40 aspect-[4/3] w-full overflow-hidden">
             {hasIllustration ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -49,11 +51,30 @@ export default function NovelReadModal({ novel, onClose }: Props) {
                 alt={novel.title}
                 className="h-full w-full object-cover"
               />
-            ) : (
+            ) : isGenerating ? (
               <div className="flex h-full w-full items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
                   <p className="text-xs text-brand-400">일러스트를 그리는 중…</p>
+                </div>
+              </div>
+            ) : (
+              // failed 상태
+              <div className="flex h-full w-full items-center justify-center bg-rose-50/30">
+                <div className="flex flex-col items-center gap-3 px-6 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full
+                                  bg-rose-100 text-rose-400 text-lg">!</div>
+                  <p className="text-xs text-rose-400">일러스트 생성에 실패했어요</p>
+                  {onRetryIllustration && (
+                    <button
+                      onClick={() => onRetryIllustration(novel.id)}
+                      className="rounded-xl bg-white border border-rose-200 px-4 py-2
+                                 text-xs font-semibold text-rose-500 hover:bg-rose-50
+                                 active:scale-[0.98] transition-all shadow-sm"
+                    >
+                      ↻ 다시 시도
+                    </button>
+                  )}
                 </div>
               </div>
             )}
