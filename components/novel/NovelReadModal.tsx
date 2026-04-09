@@ -35,6 +35,20 @@ export default function NovelReadModal({
     novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
   const isFailed = novel.illustrationStatus === 'failed';
 
+  // 모달 콘텐츠 영역 아무 데나 클릭해도 닫히게 한다.
+  // 단, 사용자가 텍스트를 드래그 선택한 상태(복사 중)면 닫지 않는다.
+  // 내부 인터랙티브 요소(× 버튼, 재시도 버튼, 네비게이션 푸터)는 각자
+  // stopPropagation으로 이 핸들러까지 이벤트가 올라오지 않도록 막는다.
+  const handleContentClick = () => {
+    if (typeof window !== 'undefined') {
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        return;
+      }
+    }
+    dismiss();
+  };
+
   // ─── 순번 & 네비게이션 계산 ──────────────────────────────────────────────
   //
   // seriesNovels는 loadNovels()가 created_at DESC로 반환한 배열이다.
@@ -74,7 +88,7 @@ export default function NovelReadModal({
       <div
         className="modal-max-h flex w-full max-w-xl flex-col
                    rounded-3xl border border-brand-100 bg-white shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        onClick={handleContentClick}
       >
         {/* 헤더 — 시리즈 타이틀 + 편 정보 (고정) */}
         <div className="border-b border-slate-100 px-5 py-3 shrink-0">
@@ -89,11 +103,6 @@ export default function NovelReadModal({
                     {series.title}
                   </p>
                 </div>
-              )}
-              {episodeNumber !== null && total > 0 && (
-                <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                  {episodeNumber}화 · 전 {total}편
-                </p>
               )}
             </div>
             <button
