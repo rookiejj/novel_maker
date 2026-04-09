@@ -3,6 +3,7 @@
 오늘의 기분과 날씨를 기록하면, 그것을 반영한 짧은 소설을 한 편 써 드립니다.
 소설은 시리즈 단위로 이어서 연재할 수 있고, 자동으로 세계관과 등장인물이 누적됩니다.
 저장된 소설에는 장면에 어울리는 일러스트가 자동으로 생성되어 카드에 붙습니다.
+아이를 위한 동화 장르는 전용 프롬프트·스타일로 분리되어 있어 부모가 안심하고 읽어줄 수 있는 톤을 유지합니다.
 
 ## 기술 스택
 
@@ -130,7 +131,7 @@ Vercel 프로젝트 → Settings → Environment Variables에 위 환경변수 5
 │   ├── layout/
 │   │   └── Header.tsx              # 헤더 + 조건부 로그아웃 버튼
 │   ├── views/
-│   │   ├── HomeView.tsx            # 메인 화면 (로딩 상태/시리즈/작성/지난 이야기/폴링/재시도/자동 스크롤)
+│   │   ├── HomeView.tsx            # 메인 화면 (로딩/시리즈/작성/목록/폴링/재시도/자동 스크롤)
 │   │   └── LoginSection.tsx        # 비로그인 시 HomeView 내부에 렌더되는 로그인 카드
 │   ├── mood/
 │   │   ├── MoodSelector.tsx        # 오늘의 기분 선택
@@ -138,10 +139,10 @@ Vercel 프로젝트 → Settings → Environment Variables에 위 환경변수 5
 │   ├── weather/
 │   │   └── WeatherSelector.tsx     # 오늘의 날씨 선택
 │   ├── novel/
-│   │   ├── NovelWizard.tsx         # 장르/분위기/필체/분량/주인공/총편수(10/20/30) 선택
+│   │   ├── NovelWizard.tsx         # 시리즈 설정 + 이번 편 설정 (그룹 2단 구조)
 │   │   ├── NovelViewer.tsx         # 스트리밍 소설 뷰어 (페이싱 버퍼 + 상시 footer)
-│   │   ├── NovelCard.tsx           # 저장된 소설 카드 (일러스트 썸네일 + 실패 시 재시도)
-│   │   ├── NovelReadModal.tsx      # 소설 전체 읽기 모달 (일러스트 + 재시도, 배경 클릭 닫기)
+│   │   ├── NovelCard.tsx           # 저장된 소설 카드 (일러스트 + 실패 시 재시도)
+│   │   ├── NovelReadModal.tsx      # 소설 전체 읽기 모달 (일러스트 + 재시도, 배경/콘텐츠 클릭 닫기)
 │   │   └── SeriesPickerModal.tsx   # 시리즈 전환 모달 (완결/진행 중 배지)
 │   └── ui/
 │       └── TwEmoji.tsx             # Twemoji 렌더러
@@ -157,8 +158,8 @@ Vercel 프로젝트 → Settings → Environment Variables에 위 환경변수 5
 │   ├── useModalBackDismiss.ts      # 모달 공통 훅 (뒤로 가기 가로채기 + body 스크롤 잠금)
 │   └── utils.ts                    # generateId(), extractTitle(), formatDate() 등
 ├── prompts/
-│   ├── novelist.ts                 # 소설가 시스템 프롬프트 빌더
-│   └── illustration.ts             # 일러스트 프롬프트 생성용 Haiku 시스템 프롬프트
+│   ├── novelist.ts                 # 소설가 시스템 프롬프트 빌더 (일반 + 동화 분기)
+│   └── illustration.ts             # 일러스트 프롬프트 생성용 Haiku 시스템 프롬프트 (장르별 스타일)
 ├── middleware.ts                   # Supabase 세션 쿠키 갱신 (리다이렉트 없음)
 └── vercel.json                     # maxDuration: 300
 ```
@@ -210,11 +211,35 @@ app/page.tsx             → supabase.auth.getUser() 체크
    - `/api/summarize` 호출하여 story bible / world bible 자동 생성·병합
    - `/api/illustration` 을 fire-and-forget으로 트리거
 
+### 위저드 구조 (시리즈 설정 / 이번 편 설정)
+
+`NovelWizard`는 필드를 두 개의 카드로 시각적으로 분리해 "이 값은 한 번 정하면 끝"과 "이 값은 매 편 바꿀 수 있음"을 사용자가 직관적으로 구분할 수 있게 합니다.
+
+- **📘 시리즈 설정** (brand-50/40 배경): 장르 / 주인공 이름 / 주인공 성별 / 시리즈 총 편수 (10·20·30편). 부제는 새 시리즈일 때 "한 번 정하면 연재 내내 유지돼요", 기존 시리즈 이어쓰기일 때 "이 시리즈의 고정 설정".
+- **✏️ 이번 편 설정** (흰색 배경): 분위기 / 필체 / 분량. 부제는 "편마다 자유롭게 바꿀 수 있어요".
+
+기존 시리즈를 이어쓰는 경우, 시리즈 설정 카드는 **한 줄 요약 배지**로 압축됩니다 (`📕 공포 · 소연(여성) · 총 10편`). 매번 같은 정보를 큰 카드로 반복 노출하는 대신 필요한 정보만 한눈에 보여줘 위저드의 공간 낭비를 줄입니다. 헤더(타이틀·부제)는 그대로 유지해 새 시리즈 카드와 시각적 일관성을 가집니다.
+
 ### 스트리밍 뷰어와 페이싱
 
 `NovelViewer`는 SSE 청크를 그대로 화면에 붙이지 않고, 내부 버퍼(`pendingBufferRef`)에 쌓은 뒤 `requestAnimationFrame` 루프에서 적응형 속도(`perFrame = max(2, ceil(pending / 30))`)로 조금씩 흘려보냅니다. 이로써 청크 크기·간격의 불균일을 어느 정도 흡수해 "멈춤 → 뭉텅이 → 멈춤"의 체감을 완화합니다. 서버 `event: done` 수신 시에는 즉시 완료 전이하지 않고 `streamDoneRef`만 세우며, 루프가 버퍼를 모두 비운 뒤에야 `status='done'`으로 전이해 "마지막 문장이 뚝 나타나고 바로 저장 버튼"이 생기는 현상을 막습니다. rAF 루프와 fetch는 하나의 `useEffect`로 묶여 있고, 진입 시점에 모든 ref가 명시적으로 리셋되어 React Strict Mode 이중 실행에서도 상태가 꼬이지 않습니다.
 
 Footer는 항상 표시되지만, `canSave = (status === 'done' && !saved && raw.trim().length > 0)`가 아닐 때 저장 버튼은 `disabled` + 회색 + `cursor-not-allowed`로 시각·기능 모두 비활성화되고 라벨도 상태에 따라 `작성 중…` / `저장 불가` / `저장하기` / `저장됨 ✓`로 바뀝니다. 스트리밍 중엔 헤더의 `×` 버튼 없이 하단 `취소` 버튼으로만 나가도록 해 UX를 단순화했습니다.
+
+### 동화 장르 — 전용 프롬프트 분기
+
+`'동화'` 장르는 어린 아이(3~8세)가 부모와 함께 읽는 그림책 톤을 타깃으로 하며, 일반 소설 장르들과는 프롬프트·스타일이 완전히 분리되어 있습니다.
+
+`prompts/novelist.ts`는 `genre === '동화'`일 때 다음을 교체 주입합니다:
+
+- **`FAIRYTALE_STAGE_GUIDE`** — 기승전결 단계별 지침. "갈등 고조 / 위기 / 반전" 대신 "작은 궁금증 / 조금 어려운 순간 / 작은 용기"처럼 어조를 부드럽게 바꿔, 작가 AI가 자극적으로 흐르지 않도록 합니다.
+- **`FAIRYTALE_NARRATIVE_DEVICES`** — "옛날 옛적에", "주인공이 아침에 눈을 뜨자마자 창문 밖에서 나는 신기한 소리를 따라가며", "달빛이 내려앉은 밤, 숲의 나무들이 속삭이기 시작" 같은 따뜻한 서사 장치 풀. 일반 장르의 "거짓말·불안감·반전" 기반 장치들과 교체됩니다.
+- **`FAIRYTALE_GUIDELINES`** — 시스템 프롬프트에 통째로 주입되는 10개 원칙: 따뜻함·안심, 말하는 동물과 살아 있는 자연, 쉬운 어휘, 의성어/의태어, 3의 반복 리듬, 해요체 존댓말, 교훈은 행동으로, 귀여운 이름 사용, 그리고 죽음·폭력·악당 승리·부모 부재·성적 암시·정치/종교·공포 감정 장기화·따라하면 위험한 행동 묘사의 절대 금지 목록.
+- **작가 페르소나** — `WRITER_PERSONA['동화']`는 "아이가 잠들기 전에 부모가 읽어주는 따뜻한 한국어 동화 작가".
+
+`prompts/illustration.ts`도 장르 파라미터를 받아 스타일을 분기합니다. 동화일 때는 `"children's picture book illustration, soft watercolor, warm pastel colors, gentle rounded shapes, cozy storybook style, whimsical, dreamy lighting"` 스타일 키워드를 쓰고, 추가로 "무서운 장면·어두운 색조 금지 / 파스텔 톤 / 자연광 / 귀여운 단순한 얼굴 / 사랑스러운 동물 표정" 제약 섹션이 붙습니다. 다른 장르는 기존 지브리풍 애니메이션 스타일 그대로.
+
+이 분기는 모두 `isFairytale` 플래그 기반으로 한 함수 안에 격리되어 있어, 다른 장르의 프롬프트에는 한 글자도 영향을 주지 않습니다.
 
 ### 자동 스크롤
 
@@ -223,6 +248,10 @@ Footer는 항상 표시되지만, `canSave = (status === 'done' && !saved && raw
 - **위저드 → 뷰어**: `step === 'viewing'`으로 바뀌는 순간 페이지를 최상단으로 smooth 스크롤. 뷰어 높이가 작아 페이지 중간에서 클릭했을 때 뷰어가 화면 밖에 렌더되는 문제를 막습니다.
 - **저장 후 홈 복귀**: `handleNovelSaved`가 `justSavedRef.current = true`를 세우고, `step === 'home'` 전이 effect가 이 플래그를 소비하여 "지난 이야기" 섹션(`novelListSectionRef`)으로 `scrollIntoView`. 뷰어가 사라지면서 레이아웃이 줄어들어 방금 쓴 글 카드가 시야에서 벗어나는 문제를 해결합니다. 취소 경로에서는 플래그가 세워지지 않아 스크롤이 발생하지 않습니다.
 
+### 위저드 취소 시 활성 시리즈 복원
+
+"+ 새 시리즈" 버튼은 `activeSeries`를 `null`로 비우고 기존 활성 시리즈를 `prevActiveSeriesRef`에 백업합니다. 사용자가 위저드에서 취소하면 `handleWizardCancel`이 이 ref에서 이전 시리즈를 꺼내 `setActiveSeries`로 동기 복원하고, `novels` 재로드는 백그라운드로 돌립니다. 이 처리가 없으면 "+ 새 시리즈 → 취소" 후 홈에 기존 시리즈가 여러 개 있어도 "첫 번째 시리즈를 시작해보세요" 빈 상태가 표시되는 버그가 발생합니다. 기존 시리즈 "이어쓰기"로 위저드에 진입한 경우에는 `prevActiveSeriesRef`가 비어 있으므로 복원 로직이 no-op입니다.
+
 ### 모달 뒤로 가기 가로채기 + body 스크롤 잠금
 
 `lib/useModalBackDismiss.ts`가 `NovelReadModal`과 `SeriesPickerModal`에서 공통으로 사용되는 훅입니다. 해결하는 두 문제:
@@ -230,6 +259,10 @@ Footer는 항상 표시되지만, `canSave = (status === 'done' && !saved && raw
 1. **모바일 뒤로 가기 → 앱 탈출**: 순수 React state로 열리는 모달은 브라우저 history에 엔트리가 없어, Android 백키 / iOS 엣지 스와이프를 누르면 루트 페이지가 아닌 이전 페이지(=로그인 화면)로 이동해버립니다. 훅은 모달이 열리는 순간 `history.pushState`로 더미 엔트리를 추가하고 `popstate` 리스너를 등록해, 뒤로 가기를 "모달 닫기"로 가로챕니다. 내부의 X 버튼 · 백드롭 클릭 등 수동 닫기 경로는 훅이 반환하는 `dismiss()`를 호출하며, `dismiss()`는 `history.back()`을 실행해 우리가 쌓은 엔트리를 소비하고 `popstate` 리스너가 `onClose`를 호출하는 단일 경로로 수렴합니다. **cleanup에서는 리스너만 제거하고 `history.back()`은 호출하지 않습니다** — 호출하면 React Strict Mode 이중 실행 시 popstate가 연쇄로 발생해 "모달이 열리자마자 스스로 닫히는" 버그가 생깁니다.
 
 2. **뒷배경 스크롤 방지 + fixed 모달 위치 틀어짐**: 단순 `body { overflow: hidden }`만 걸면 iOS Safari / 모바일 Chrome에서 현재 스크롤 위치가 유지되지 못해, 페이지를 한참 아래로 스크롤한 상태에서 모달을 열면 fixed 모달이 "원래 scrollY만큼 밀려난" 위치에 렌더되어 하단이 화면 밖으로 잘리는 문제가 있었습니다. 훅은 대신 `position: fixed + top: -${scrollY}px` 패턴을 씁니다. body를 viewport에 고정하면서 top 값으로 기존 스크롤 위치를 상쇄하면 시각적으로는 제자리에 있고 실제 문서 스크롤은 0으로 리셋되어, 뒷배경이 완벽히 멈추고 fixed 모달도 viewport 기준으로 정확히 렌더됩니다. 모달이 닫힐 때 body 스타일을 원복하고 `window.scrollTo(0, savedScrollY)`로 복원합니다. 모듈 레벨 카운터(`lockCount`)로 참조 카운팅해 여러 모달 중첩에도 안전합니다.
+
+### 소설 읽기 모달 — 배경 + 콘텐츠 클릭으로 닫기
+
+`NovelReadModal`은 backdrop 클릭뿐 아니라 모달 콘텐츠 자체를 클릭해도 닫힙니다. 단, `window.getSelection().toString()`이 비어 있지 않으면(= 사용자가 텍스트를 드래그 선택한 상태) 닫기를 건너뛰어 복사 UX를 보호합니다. 내부 버튼(×, 재시도)은 `e.stopPropagation()`으로 닫기 경로와 완전히 분리되어 있습니다.
 
 ### 모달 높이 (iOS 주소창 대응)
 
@@ -255,6 +288,7 @@ Footer는 항상 표시되지만, `canSave = (status === 'done' && !saved && raw
    │                                    │ 2. novels 행 로드, 이미 done/generating이면 스킵
    │                                    │ 3. status='generating'으로 업데이트
    │                                    │ 4. Claude Haiku에 프롬프트 생성 요청
+   │                                    │    (장르별 스타일 분기 — 동화는 수채화 그림책 톤)
    │                                    │ 5. Fal.ai (flux/schnell) 호출 — 4:3 landscape
    │                                    │ 6. 이미지 바이트 다운로드
    │                                    │ 7. Supabase Storage 업로드 (service_role 클라이언트)
