@@ -702,6 +702,9 @@ export default function HomeView({ isAuthenticated }: Props) {
       {readingNovel && (
         <NovelReadModal
           novel={readingNovel}
+          series={activeSeries}
+          seriesNovels={novels}
+          onNavigate={setReadingNovel}
           onClose={() => setReadingNovel(null)}
           onRetryIllustration={handleRetryIllustration}
         />

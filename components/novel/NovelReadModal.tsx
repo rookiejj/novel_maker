@@ -1,6 +1,7 @@
 'use client';
 
-import type { NovelRecord } from '@/lib/types';
+import { useEffect, useRef } from 'react';
+import type { NovelRecord, Series } from '@/lib/types';
 import { GENRE_MAP, ATMOSPHERE_MAP, MOOD_MAP } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import TwEmoji from '@/components/ui/TwEmoji';
@@ -8,39 +9,62 @@ import { useModalBackDismiss } from '@/lib/useModalBackDismiss';
 
 interface Props {
   novel:   NovelRecord;
+  /** 현재 시리즈(타이틀 표시용). 없으면 시리즈 헤더 숨김 */
+  series?: Series | null;
+  /** 같은 시리즈의 소설 목록 (created_at DESC 기준). 순번·네비게이션용 */
+  seriesNovels?: NovelRecord[];
+  /** 이전/다음 편으로 이동. HomeView가 readingNovel 상태를 교체한다 */
+  onNavigate?: (novel: NovelRecord) => void;
   onClose: () => void;
   onRetryIllustration?: (id: string) => void;
 }
 
-export default function NovelReadModal({ novel, onClose, onRetryIllustration }: Props) {
+export default function NovelReadModal({
+  novel, series, seriesNovels, onNavigate, onClose, onRetryIllustration,
+}: Props) {
   const dismiss = useModalBackDismiss(onClose);
+
+  // 스크롤 컨테이너 ref — 편을 넘길 때 맨 위로 리셋
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [novel.id]);
 
   const hasIllustration = !!novel.illustrationUrl;
   const isGenerating =
     novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
   const isFailed = novel.illustrationStatus === 'failed';
 
-  // 모달 콘텐츠 영역 클릭 시에도 닫히도록.
-  // 단, 아래 조건에서는 닫지 않음:
-  //   - 텍스트가 드래그 선택된 상태 (사용자가 복사 중일 수 있음)
-  //   - 내부 버튼(재시도 등)은 별도 stopPropagation으로 이미 격리
-  const handleContentClick = () => {
-    if (typeof window !== 'undefined') {
-      const selection = window.getSelection();
-      if (selection && selection.toString().length > 0) {
-        return; // 선택된 텍스트가 있으면 닫지 않음
-      }
-    }
-    dismiss();
-  };
+  // ─── 순번 & 네비게이션 계산 ──────────────────────────────────────────────
+  //
+  // seriesNovels는 loadNovels()가 created_at DESC로 반환한 배열이다.
+  // 따라서 배열의 index는 "최신 → 오래된" 순이고, 사용자에게 보여줄
+  // "N번째 편" 표기는 역순이어야 자연스럽다.
+  //
+  //   seriesNovels = [5편, 4편, 3편, 2편, 1편]     (DESC)
+  //   episodeNumber = seriesNovels.length - index
+  //     index=0 → 5편, index=4 → 1편
+  //
+  // 이전편(더 과거 화차)은 index + 1, 다음편(더 미래 화차)은 index - 1.
+  const list = seriesNovels ?? [];
+  const currentIndex = list.findIndex(n => n.id === novel.id);
+  const total = list.length;
+  const episodeNumber = currentIndex >= 0 ? total - currentIndex : null;
 
-  // 구조
-  // ────
-  // · Backdrop (fixed inset-0, flex center): 스크롤 컨테이너가 아님.
-  //   클릭 → dismiss. body 스크롤은 훅이 잠금.
-  // · 모달 콘텐츠: .modal-max-h로 높이 제한 + 내부에 스크롤 컨테이너.
-  //   클릭 → handleContentClick (선택된 텍스트 있으면 유지, 없으면 dismiss).
-  // · 내부 버튼(×, 재시도)은 stopPropagation으로 닫기 동작 차단.
+  const prevNovel = currentIndex >= 0 && currentIndex < total - 1
+    ? list[currentIndex + 1]
+    : null;
+  const nextNovel = currentIndex > 0
+    ? list[currentIndex - 1]
+    : null;
+
+  const canNavigate = !!onNavigate && total > 1 && currentIndex >= 0;
+
+  function handleNav(target: NovelRecord | null) {
+    if (!target || !onNavigate) return;
+    onNavigate(target);
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center
@@ -50,30 +74,48 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
       <div
         className="modal-max-h flex w-full max-w-xl flex-col
                    rounded-3xl border border-brand-100 bg-white shadow-2xl overflow-hidden"
-        onClick={handleContentClick}
+        onClick={e => e.stopPropagation()}
       >
-        {/* 헤더 (고정) */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3 shrink-0">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <TwEmoji emoji={GENRE_MAP[novel.config.genre].icon} size={14} />
-            <span className="font-medium">{GENRE_MAP[novel.config.genre].label}</span>
-            <span>·</span>
+        {/* 헤더 — 시리즈 타이틀 + 편 정보 (고정) */}
+        <div className="border-b border-slate-100 px-5 py-3 shrink-0">
+          {/* 상단: 시리즈 타이틀 + 편 순번 + 닫기 */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {series && (
+                <div className="flex items-center gap-1.5">
+                  <TwEmoji emoji={GENRE_MAP[series.genre].icon} size={13} />
+                  <p className="truncate text-[11px] font-semibold text-brand-500
+                                uppercase tracking-wider">
+                    {series.title}
+                  </p>
+                </div>
+              )}
+              {episodeNumber !== null && total > 0 && (
+                <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                  {episodeNumber}화 · 전 {total}편
+                </p>
+              )}
+            </div>
+            <button
+              onClick={e => { e.stopPropagation(); dismiss(); }}
+              className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors shrink-0"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* 하단: 장르·분위기·기분·날짜 */}
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-400">
             <span>{ATMOSPHERE_MAP[novel.config.atmosphere].label}</span>
             <span>·</span>
-            <TwEmoji emoji={MOOD_MAP[novel.baseMood].emoji} size={14} />
+            <TwEmoji emoji={MOOD_MAP[novel.baseMood].emoji} size={13} />
             <span>·</span>
             <span>{formatDate(novel.createdAt)}</span>
           </div>
-          <button
-            onClick={e => { e.stopPropagation(); dismiss(); }}
-            className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors"
-          >
-            ×
-          </button>
         </div>
 
         {/* 스크롤 컨테이너 */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div ref={scrollBodyRef} className="flex-1 overflow-y-auto overscroll-contain">
           {/* 일러스트 */}
           {(hasIllustration || isGenerating || isFailed) && (
             <div className="bg-brand-50/40 aspect-[4/3] w-full overflow-hidden">
@@ -92,7 +134,6 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
                   </div>
                 </div>
               ) : (
-                // failed 상태
                 <div className="flex h-full w-full items-center justify-center bg-rose-50/30">
                   <div className="flex flex-col items-center gap-3 px-6 text-center">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full
@@ -123,6 +164,45 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
             </div>
           </div>
         </div>
+
+        {/* 네비게이션 푸터 (고정) — 시리즈 내 여러 편이 있을 때만 노출 */}
+        {canNavigate && (
+          <div
+            className="flex items-center justify-between gap-2 border-t border-slate-100
+                       bg-white px-3 py-2 shrink-0"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => handleNav(prevNovel)}
+              disabled={!prevNovel}
+              className={`flex-1 flex items-center justify-center gap-1 rounded-xl px-3 py-2
+                          text-xs font-semibold transition-all
+                          ${prevNovel
+                            ? 'text-brand-600 hover:bg-brand-50 active:scale-[0.98]'
+                            : 'text-slate-300 cursor-not-allowed'}`}
+            >
+              <span aria-hidden>←</span>
+              <span>이전 편</span>
+            </button>
+
+            <span className="text-[11px] font-medium text-slate-400 px-2 shrink-0">
+              {episodeNumber}/{total}
+            </span>
+
+            <button
+              onClick={() => handleNav(nextNovel)}
+              disabled={!nextNovel}
+              className={`flex-1 flex items-center justify-center gap-1 rounded-xl px-3 py-2
+                          text-xs font-semibold transition-all
+                          ${nextNovel
+                            ? 'text-brand-600 hover:bg-brand-50 active:scale-[0.98]'
+                            : 'text-slate-300 cursor-not-allowed'}`}
+            >
+              <span>다음 편</span>
+              <span aria-hidden>→</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
