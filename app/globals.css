@@ -15,12 +15,19 @@
   }
 }
 
-/* 소설 본문 타이포그래피 */
+/* 소설 본문 타이포그래피
+   - 문단 사이 여백을 한 번 더 절반으로 축소 (0.5em → 0.25em)
+   - Tailwind Typography 플러그인의 기본 prose p margin(1.25em)과
+     각 <p>에 붙은 mb-4(1rem) 유틸리티까지 함께 덮어쓰기 위해 !important 사용
+   - line-height(문단 내부 줄간격)는 유지 */
 .prose p {
-  margin-bottom: 1em;
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
   line-height: 2.0;
   word-break: keep-all;
 }
+.prose p:first-child { margin-top: 0 !important; }
+.prose p:last-child  { margin-bottom: 0 !important; }
 
 /* 스크롤바 커스터마이징 */
 ::-webkit-scrollbar { width: 4px; }

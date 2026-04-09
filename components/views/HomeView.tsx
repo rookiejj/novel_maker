@@ -233,76 +233,116 @@ export default function HomeView({ isAuthenticated }: Props) {
     setStep('home');
   }
 
-  async function handleNovelSaved(record: NovelRecord) {
+  // ─── 저장 직후 호출 ───────────────────────────────────────────────────────
+  //
+  // 이 함수의 반환(resolve) 시점에 NovelViewer가 onClose()를 부른다.
+  // 따라서 "뷰어가 즉시 닫히는" 것을 보장하려면 이 함수가 최소한의 동기 작업만
+  // 수행하고 곧바로 resolve되어야 한다.
+  //
+  // 단, 두 가지는 반드시 첫 `await` 이전에 동기적으로 처리되어야 한다:
+  //   (1) pendingNewSeriesRef.current = null
+  //       → 이게 누락되면 handleViewerClose가 방금 저장한 시리즈를 고아로
+  //         판단해 deleteSeries()로 날려버린다. (새 시리즈 첫 화 데이터 손실)
+  //   (2) novels 낙관적 갱신 — 뷰어가 닫히자마자 홈 화면에 방금 쓴 글이
+  //       카드로 보이도록. (백그라운드 loadNovels가 곧 진짜 상태로 덮어씀)
+  //
+  // 나머지 무거운 작업(incrementEpisodeCount / updateSeriesLastOptions /
+  // loadAllSeries / loadNovels / Haiku /api/summarize 호출 / worldBible/storyBible
+  // 저장 등)은 전부 백그라운드 IIFE로 밀어낸다. 이들은 서버측 정합성 작업이라
+  // 실패해도 다음 홈 진입 시 loadAllSeries/loadNovels가 진실 상태를 복구한다.
+  function handleNovelSaved(record: NovelRecord) {
     const seriesId = record.seriesId;
 
-    // 새 시리즈는 이미 handleWizardComplete에서 DB에 저장됐다.
-    // 소설 저장이 성공했으므로 롤백 대상에서 해제.
+    // ★ (1) 롤백 방지 — 반드시 첫 await 이전!
     pendingNewSeriesRef.current = null;
 
-    // episode count 증가
-    await incrementEpisodeCount(seriesId);
+    // ★ (2) 낙관적 목록 갱신 — 중복 방지를 위해 동일 id가 있으면 덮어쓴다.
+    //     illustrationStatus를 'pending'으로 명시해 폴링 트리거가 즉시 붙도록 함.
+    const optimistic: NovelRecord = { ...record, illustrationStatus: 'pending' };
+    setNovels(prev => {
+      const without = prev.filter(n => n.id !== optimistic.id);
+      return [optimistic, ...without];
+    });
 
-    // 위저드 설정 저장
-    if (record.config.atmosphere && record.config.style && record.config.length) {
-      await updateSeriesLastOptions(seriesId, {
-        atmosphere: record.config.atmosphere,
-        style:      record.config.style,
-        length:     record.config.length,
-      });
-    }
-
-    // series state 갱신
-    const freshSeries = await loadAllSeries();
-    setAllSeries(freshSeries);
-    setActiveSeries(freshSeries.find(s => s.id === seriesId) ?? null);
-    setNovels(await loadNovels(seriesId));
+    // 홈으로 돌아갔을 때 activeSeries의 episodeCount가 한 박자 늦게 보이는 것을
+    // 막기 위해 로컬 activeSeries도 낙관적으로 +1 해둔다. 백그라운드에서
+    // loadAllSeries가 곧 진짜 값으로 덮어쓴다.
+    setActiveSeries(prev =>
+      prev && prev.id === seriesId
+        ? { ...prev, episodeCount: prev.episodeCount + 1 }
+        : prev,
+    );
 
     // 일러스트 생성 트리거 (fire-and-forget).
-    // 서버가 백그라운드로 Haiku → Fal → Storage 업로드 → DB 갱신을 진행하고,
-    // 클라이언트는 아래 useEffect의 폴링으로 상태 변화를 감지한다.
     triggerIllustrationGeneration(record.id);
 
-    const worldBible   = await loadWorldBible(seriesId);
-    const isFirstNovel = !worldBible;
-    const date         = new Date().toISOString().slice(0, 10);
-    const moodLabel    = todayMood ? MOOD_MAP[todayMood.emoji].label : '';
+    // ─── 백그라운드 후처리 ─────────────────────────────────────────────────
+    // 여기서부터는 뷰어 닫힘 속도와 무관. 실패해도 UI는 막히지 않는다.
+    void (async () => {
+      try {
+        // episode count 증가 (DB 정합성)
+        await incrementEpisodeCount(seriesId);
 
-    try {
-      const res = await fetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          novelId: record.id, seriesId,
-          title: record.title, content: record.content,
-          genre: record.config.genre, date, mood: moodLabel,
-          isFirstNovel, existingWorld: worldBible ?? undefined,
-        }),
-      });
-
-      if (res.ok) {
-        const { storyBible, worldBible: newWB, newCharacterProfiles, suggestedSeriesTitle } =
-          await res.json() as {
-            storyBible: StoryBibleEntry; worldBible: WorldBible | null;
-            newCharacterProfiles: WorldBible['characters']; suggestedSeriesTitle: string | null;
-          };
-
-        await saveStoryBible(storyBible);
-        if (isFirstNovel && newWB) {
-          await saveWorldBible(newWB);
-          if (suggestedSeriesTitle) {
-            await updateSeriesTitle(seriesId, suggestedSeriesTitle);
-            const updated = await loadAllSeries();
-            setAllSeries(updated);
-            setActiveSeries(updated.find(s => s.id === seriesId) ?? null);
-          }
-        } else if (!isFirstNovel && newCharacterProfiles?.length > 0) {
-          await mergeCharactersIntoWorldBible(seriesId, newCharacterProfiles);
+        // 위저드 설정 저장
+        if (record.config.atmosphere && record.config.style && record.config.length) {
+          await updateSeriesLastOptions(seriesId, {
+            atmosphere: record.config.atmosphere,
+            style:      record.config.style,
+            length:     record.config.length,
+          });
         }
+
+        // 서버 진실로 리프레시 (낙관적 상태를 덮어쓴다)
+        const freshSeries = await loadAllSeries();
+        setAllSeries(freshSeries);
+        setActiveSeries(freshSeries.find(s => s.id === seriesId) ?? null);
+        setNovels(await loadNovels(seriesId));
+      } catch (err) {
+        console.warn('[handleNovelSaved] episode/series 후처리 실패:', err);
       }
-    } catch (err) {
-      console.warn('[Story/World Bible] 생성 실패:', err);
-    }
+
+      // Story/World Bible 요약 (Haiku 호출 — 수 초 소요)
+      try {
+        const worldBible   = await loadWorldBible(seriesId);
+        const isFirstNovel = !worldBible;
+        const date         = new Date().toISOString().slice(0, 10);
+        const moodLabel    = todayMood ? MOOD_MAP[todayMood.emoji].label : '';
+
+        const res = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            novelId: record.id, seriesId,
+            title: record.title, content: record.content,
+            genre: record.config.genre, date, mood: moodLabel,
+            isFirstNovel, existingWorld: worldBible ?? undefined,
+          }),
+        });
+
+        if (res.ok) {
+          const { storyBible, worldBible: newWB, newCharacterProfiles, suggestedSeriesTitle } =
+            await res.json() as {
+              storyBible: StoryBibleEntry; worldBible: WorldBible | null;
+              newCharacterProfiles: WorldBible['characters']; suggestedSeriesTitle: string | null;
+            };
+
+          await saveStoryBible(storyBible);
+          if (isFirstNovel && newWB) {
+            await saveWorldBible(newWB);
+            if (suggestedSeriesTitle) {
+              await updateSeriesTitle(seriesId, suggestedSeriesTitle);
+              const updated = await loadAllSeries();
+              setAllSeries(updated);
+              setActiveSeries(updated.find(s => s.id === seriesId) ?? null);
+            }
+          } else if (!isFirstNovel && newCharacterProfiles?.length > 0) {
+            await mergeCharactersIntoWorldBible(seriesId, newCharacterProfiles);
+          }
+        }
+      } catch (err) {
+        console.warn('[Story/World Bible] 생성 실패:', err);
+      }
+    })();
   }
 
   async function handleDelete(id: string) {

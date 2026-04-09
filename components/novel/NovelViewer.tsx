@@ -77,14 +77,24 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
     const { title, body } = extractTitle(raw);
     setSaved(true);
     try {
+      // 1) Supabase에 소설 저장 — 이 단계가 성공해야 아래로 진행
       const record = await novelStorage.save({
         title,
         content: body,
         config,
         baseMood: baseMood?.mood ?? '😌',
       });
+
+      // 2) 부모(HomeView.handleNovelSaved)에 알림.
+      //    handleNovelSaved는 이제 "동기적 최소 작업(롤백 플래그 해제 + 낙관적 목록 갱신)"만
+      //    수행하고 무거운 DB/LLM 후처리는 자체적으로 백그라운드에 던진다.
+      //    따라서 이 await는 실질적으로 수 ms 안에 끝나며, 뷰어는 곧바로 닫힌다.
+      //
+      //    ★ 순서가 중요하다: onSaved → onClose.
+      //    반대로 하면 새 시리즈의 첫 화 저장 시 HomeView가 pending 플래그를
+      //    해제할 틈 없이 handleViewerClose가 돌아 시리즈가 롤백(삭제)된다.
       await onSaved(record);
-      setTimeout(() => onClose(), 700);
+      onClose();
     } catch (err) {
       console.error('[NovelViewer] 저장 실패:', err);
       setSaved(false);
