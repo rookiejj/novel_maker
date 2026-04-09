@@ -30,34 +30,51 @@ export default function SeriesPickerModal({ series, activeId, onSelect, onClose 
           </h2>
 
           <div className="space-y-2 max-h-72 overflow-y-auto">
-            {series.map(s => (
-              <button
-                key={s.id}
-                onClick={() => onSelect(s)}
-                className={`w-full flex items-center justify-between rounded-2xl border p-4
-                  text-left transition-all
-                  ${s.id === activeId
-                    ? 'border-brand-300 bg-brand-50'
-                    : 'border-slate-100 bg-white hover:border-brand-200 hover:bg-brand-50/50'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50">
-                    <TwEmoji emoji={GENRE_MAP[s.genre].icon} size={22} />
+            {series.map(s => {
+              // 완결 여부 판정: episodeCount가 totalEpisodes에 도달했는가.
+              // 홈 화면의 시리즈 카드와 동일한 기준을 적용해 일관성 유지.
+              const isComplete = s.episodeCount >= s.totalEpisodes;
+              const isActive   = s.id === activeId;
+
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => onSelect(s)}
+                  className={`w-full flex items-center justify-between rounded-2xl border p-4
+                    text-left transition-all
+                    ${isActive
+                      ? 'border-brand-300 bg-brand-50'
+                      : 'border-slate-100 bg-white hover:border-brand-200 hover:bg-brand-50/50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50">
+                      <TwEmoji emoji={GENRE_MAP[s.genre].icon} size={22} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+                      <p className="text-xs text-slate-400">
+                        {GENRE_MAP[s.genre].label}
+                        {s.protagonistName && ` · ${s.protagonistName}`}
+                        {` · ${s.episodeCount}/${s.totalEpisodes}편`}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{s.title}</p>
-                    <p className="text-xs text-slate-400">
-                      {GENRE_MAP[s.genre].label}
-                      {s.protagonistName && ` · ${s.protagonistName}`}
-                      {` · ${s.episodeCount}편`}
-                    </p>
-                  </div>
-                </div>
-                {s.id === activeId && (
-                  <span className="text-xs font-semibold text-brand-500">진행 중</span>
-                )}
-              </button>
-            ))}
+
+                  {/* 배지: 완결 > 진행 중 (활성) > 없음 */}
+                  {isComplete ? (
+                    <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50
+                                     px-2.5 py-1 rounded-full border border-emerald-100">
+                      완결
+                    </span>
+                  ) : isActive ? (
+                    <span className="text-[11px] font-semibold text-brand-500 bg-brand-50
+                                     px-2.5 py-1 rounded-full border border-brand-100">
+                      진행 중
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
