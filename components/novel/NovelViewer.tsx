@@ -135,9 +135,6 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
         cancelAnimationFrame(rafId);
         rafId = null;
       }
-      // 주의: streamDoneRef/pendingBufferRef는 여기서 건드리지 않는다.
-      //       다음 effect 진입부에서 리셋하므로 Strict Mode 이중 실행에
-      //       영향 없음.
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -147,21 +144,20 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
   }, [raw, status]);
 
   async function handleSave() {
-    if (saved || !raw.trim()) return;
+    // 가드: 이미 저장됐거나, 완료 상태가 아니거나, 본문이 비었으면 무시.
+    // 버튼에 disabled도 걸어두지만 혹시 모를 클릭 이벤트까지 방어한다.
+    if (saved || status !== 'done' || !raw.trim()) return;
     const { title, body } = extractTitle(raw);
     setSaved(true);
     try {
-      // 1) Supabase에 소설 저장
       const record = await novelStorage.save({
         title,
         content: body,
         config,
         baseMood: baseMood?.mood ?? '😌',
       });
-
-      // 2) 부모(HomeView.handleNovelSaved)는 동기적 최소 작업만 수행 후 즉시 리턴.
-      //    ★ 순서 중요: onSaved → onClose. 반대로 하면 새 시리즈 첫 화에서
-      //    시리즈가 롤백(삭제)된다.
+      // ★ 순서 중요: onSaved → onClose. 반대로 하면 새 시리즈 첫 화에서
+      //   시리즈가 롤백(삭제)된다.
       await onSaved(record);
       onClose();
     } catch (err) {
@@ -172,6 +168,9 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
 
   const { title, body } = extractTitle(raw);
   const moodInfo = baseMood ? MOOD_MAP[baseMood.mood] : null;
+
+  // 저장 가능 여부: 스트리밍이 완전히 끝났고, 아직 저장 전이며, 본문이 존재할 때만.
+  const canSave = status === 'done' && !saved && raw.trim().length > 0;
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-brand-100 bg-white shadow-lg overflow-hidden">
@@ -218,34 +217,46 @@ export default function NovelViewer({ config, recentMoods, baseMood, onSaved, on
         )}
       </div>
 
-      {/* Footer */}
-      {status === 'done' && (
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-          <span className="text-xs text-slate-400">{formatDate(Date.now())}</span>
-          <div className="flex items-center gap-2">
-            {!saved && (
-              <button
-                onClick={onClose}
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-400
-                           border border-slate-200 hover:bg-slate-50 transition-colors"
-              >
-                취소
-              </button>
-            )}
+      {/* Footer — 항상 표시.
+          스트리밍 중에는 저장 버튼을 시각적·기능적으로 모두 비활성화해,
+          "눌리는 것처럼 보이는데 동작하지 않는" UX 결함을 방지한다. */}
+      <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+        <span className="text-xs text-slate-400">
+          {status === 'streaming' ? '작성 중…' : formatDate(Date.now())}
+        </span>
+        <div className="flex items-center gap-2">
+          {!saved && (
             <button
-              onClick={handleSave}
-              disabled={saved}
-              className={`rounded-xl px-5 py-2 text-sm font-semibold transition-all ${
-                saved
-                  ? 'bg-emerald-100 text-emerald-600 cursor-not-allowed'
-                  : 'bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.98]'
-              }`}
+              onClick={onClose}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500
+                         border border-slate-200 hover:bg-slate-50 transition-colors"
             >
-              {saved ? '저장됨 ✓' : '저장하기'}
+              취소
             </button>
-          </div>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={!canSave}
+            aria-disabled={!canSave}
+            className={`rounded-xl px-5 py-2 text-sm font-semibold transition-all
+              ${saved
+                ? 'bg-emerald-100 text-emerald-600 cursor-not-allowed'
+                : canSave
+                  ? 'bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.98]'
+                  // 스트리밍/에러 등 저장 불가 상태: 눌리지 않는다는 걸 시각·커서로 명확히.
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+              }`}
+          >
+            {saved
+              ? '저장됨 ✓'
+              : status === 'streaming'
+                ? '작성 중…'
+                : status === 'error'
+                  ? '저장 불가'
+                  : '저장하기'}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
