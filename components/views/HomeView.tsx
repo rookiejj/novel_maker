@@ -59,6 +59,14 @@ export default function HomeView({ isAuthenticated }: Props) {
   const pendingNewSeriesRef = useRef<Series | null>(null);
   const prevActiveSeriesRef = useRef<Series | null>(null);
 
+  // "방금 저장해서 홈으로 돌아가는 중"을 표시하는 플래그.
+  // handleNovelSaved에서 true로 세우고, step='home' 전이 effect에서 소비.
+  // 취소로 나가는 경로와 구분하기 위함 (그쪽은 스크롤 이동 원치 않음).
+  const justSavedRef = useRef<boolean>(false);
+
+  // 저장 후 스크롤 대상: "지난 이야기" 섹션 ref
+  const novelListSectionRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     (async () => {
       // 비로그인: Supabase 접근 없이 UI용 기본값만 세팅하고 종료.
@@ -109,15 +117,33 @@ export default function HomeView({ isAuthenticated }: Props) {
   // NovelViewer는 높이가 그리 크지 않아, 페이지 아래에서 "이야기 만들기"를
   // 누르면 뷰어가 화면 밖에 렌더되어 사용자가 당황한다. step이 'viewing'이
   // 되는 순간 페이지를 최상단으로 올린다.
-  //
-  // requestAnimationFrame을 쓰는 이유: setStep 이후 이 effect가 도는 시점은
-  // 이미 커밋 후이긴 하지만, 레이아웃/페인트가 완료되기 전에 scrollTo를 부르면
-  // 브라우저에 따라 무시되거나 부정확할 수 있다. rAF 한 번이면 다음 페인트
-  // 직전에 실행되어 안전.
   useEffect(() => {
     if (step !== 'viewing') return;
     const id = requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [step]);
+
+  // ─── 저장 후 홈 복귀 시 "지난 이야기" 섹션으로 스크롤 ──────────────────
+  //
+  // 뷰어가 닫히면 레이아웃이 확 줄어들어(viewer 사라짐 + 일러스트 카드 하나
+  // 추가), 사용자 시야에서 방금 쓴 글이 완전히 벗어날 수 있다. step이
+  // 'home'으로 돌아오면서 justSavedRef가 세워져 있을 때만, 카드 섹션이
+  // 화면 중앙에 오도록 scrollIntoView 한다.
+  //
+  // 플래그는 effect 안에서 바로 소비(false 리셋)해 다음 home 진입에 영향 없음.
+  // rAF 한 번으로 새 카드가 DOM에 렌더되고 레이아웃이 안정된 뒤 스크롤.
+  useEffect(() => {
+    if (step !== 'home') return;
+    if (!justSavedRef.current) return;
+    justSavedRef.current = false;
+
+    const id = requestAnimationFrame(() => {
+      const el = novelListSectionRef.current;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     });
     return () => cancelAnimationFrame(id);
   }, [step]);
@@ -256,12 +282,14 @@ export default function HomeView({ isAuthenticated }: Props) {
   // 따라서 "뷰어가 즉시 닫히는" 것을 보장하려면 이 함수가 최소한의 동기 작업만
   // 수행하고 곧바로 resolve되어야 한다.
   //
-  // 단, 두 가지는 반드시 첫 `await` 이전에 동기적으로 처리되어야 한다:
+  // 단, 세 가지는 반드시 첫 `await` 이전에 동기적으로 처리되어야 한다:
   //   (1) pendingNewSeriesRef.current = null
   //       → 이게 누락되면 handleViewerClose가 방금 저장한 시리즈를 고아로
   //         판단해 deleteSeries()로 날려버린다. (새 시리즈 첫 화 데이터 손실)
   //   (2) novels 낙관적 갱신 — 뷰어가 닫히자마자 홈 화면에 방금 쓴 글이
   //       카드로 보이도록. (백그라운드 loadNovels가 곧 진짜 상태로 덮어씀)
+  //   (3) justSavedRef = true — step='home' 복귀 effect가 "지난 이야기"
+  //       섹션으로 스크롤하도록 플래그 세움.
   //
   // 나머지 무거운 작업(incrementEpisodeCount / updateSeriesLastOptions /
   // loadAllSeries / loadNovels / Haiku /api/summarize 호출 / worldBible/storyBible
@@ -272,6 +300,9 @@ export default function HomeView({ isAuthenticated }: Props) {
 
     // ★ (1) 롤백 방지 — 반드시 첫 await 이전!
     pendingNewSeriesRef.current = null;
+
+    // ★ (3) 스크롤 플래그 — viewing → home 전이 effect가 소비한다.
+    justSavedRef.current = true;
 
     // ★ (2) 낙관적 목록 갱신 — 중복 방지를 위해 동일 id가 있으면 덮어쓴다.
     //     illustrationStatus를 'pending'으로 명시해 폴링 트리거가 즉시 붙도록 함.
@@ -573,7 +604,7 @@ export default function HomeView({ isAuthenticated }: Props) {
 
         {/* ── 지난 이야기 ──────────────────────────────────── */}
         {novels.length > 0 && (
-          <section>
+          <section ref={novelListSectionRef}>
             <h2 className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest mb-3">
               {activeSeries?.title ?? '지난 이야기'}
             </h2>
