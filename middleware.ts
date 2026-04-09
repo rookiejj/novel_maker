@@ -23,12 +23,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // 로그인 안 된 상태에서 /auth 외 페이지 접근 시 로그인 페이지로
-  if (!user && !request.nextUrl.pathname.startsWith('/auth')) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
-  }
+  // 세션 쿠키 갱신을 위해 호출만 한다. 리다이렉트 없음.
+  // 로그인 여부에 따른 화면 분기는 루트 페이지(서버 컴포넌트)에서 처리한다.
+  await supabase.auth.getUser();
 
   return supabaseResponse;
 }

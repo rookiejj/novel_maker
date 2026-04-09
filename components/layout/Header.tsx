@@ -9,8 +9,9 @@ export default function Header() {
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // 루트에서 통합 렌더 중이므로 refresh만 하면
+    // 서버가 비로그인 상태를 감지해 LoginView를 내려보낸다.
     router.refresh();
-    router.push('/auth/login');
   }
 
   return (
