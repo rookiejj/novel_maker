@@ -56,6 +56,17 @@ export default function HomeView({ isAuthenticated }: Props) {
   const [readingNovel,     setReadingNovel]     = useState<NovelRecord | null>(null);
   const [todayWeather,     setTodayWeather]     = useState<WeatherType | null>(null);
 
+  // 초기 데이터 로딩 상태.
+  // 로그인 직후 mount effect가 series/novels/mood/weather를 불러오는 동안 true.
+  // 이 동안에는 "첫 번째 시리즈를 시작해보세요"나 "+ 새 시리즈" 버튼을 띄우지
+  // 않고, 로딩 플레이스홀더를 보여준다. 사용자가 데이터 없는 것으로 오인하거나
+  // 성급히 버튼을 누르는 것을 방지.
+  //
+  // 초기값은 isAuthenticated에 따라 결정:
+  //   - 로그인: true (데이터 로딩 필요)
+  //   - 비로그인: false (로딩할 데이터 없음, 바로 로그인 섹션 노출)
+  const [isLoading, setIsLoading] = useState<boolean>(isAuthenticated);
+
   const pendingNewSeriesRef = useRef<Series | null>(null);
   const prevActiveSeriesRef = useRef<Series | null>(null);
 
@@ -77,39 +88,52 @@ export default function HomeView({ isAuthenticated }: Props) {
           label: MOOD_MAP['😊'].label,
         });
         setTodayWeather('맑음');
+        setIsLoading(false);
         return;
       }
 
-      // 기분 기본값: 행복해
-      const savedMood = await getTodayMood();
-      if (savedMood) {
-        setTodayMood(savedMood);
-      } else {
-        const defaultMood: MoodEntry = {
-          date: new Date().toISOString().slice(0, 10),
-          emoji: '😊',
-          label: MOOD_MAP['😊'].label,
-        };
-        await saveMood(defaultMood);
-        setTodayMood(defaultMood);
-      }
-      setMoodHistory(await loadMoodHistory());
+      // 로그인 상태: 초기 로딩 시작
+      setIsLoading(true);
 
-      // 날씨 기본값: 맑음
-      const savedWeather = await getTodayWeather();
-      if (savedWeather) {
-        setTodayWeather(savedWeather.weather);
-      } else {
-        await saveWeather({ date: new Date().toISOString().slice(0, 10), weather: '맑음' });
-        setTodayWeather('맑음');
-      }
+      try {
+        // 기분 기본값: 행복해
+        const savedMood = await getTodayMood();
+        if (savedMood) {
+          setTodayMood(savedMood);
+        } else {
+          const defaultMood: MoodEntry = {
+            date: new Date().toISOString().slice(0, 10),
+            emoji: '😊',
+            label: MOOD_MAP['😊'].label,
+          };
+          await saveMood(defaultMood);
+          setTodayMood(defaultMood);
+        }
+        setMoodHistory(await loadMoodHistory());
 
-      const series   = await loadAllSeries();
-      const activeId = await loadActiveSeriesId();
-      const active   = series.find(s => s.id === activeId) ?? series[0] ?? null;
-      setAllSeries(series);
-      setActiveSeries(active);
-      setNovels(active ? await loadNovels(active.id) : []);
+        // 날씨 기본값: 맑음
+        const savedWeather = await getTodayWeather();
+        if (savedWeather) {
+          setTodayWeather(savedWeather.weather);
+        } else {
+          await saveWeather({ date: new Date().toISOString().slice(0, 10), weather: '맑음' });
+          setTodayWeather('맑음');
+        }
+
+        const series   = await loadAllSeries();
+        const activeId = await loadActiveSeriesId();
+        const active   = series.find(s => s.id === activeId) ?? series[0] ?? null;
+        setAllSeries(series);
+        setActiveSeries(active);
+        setNovels(active ? await loadNovels(active.id) : []);
+      } catch (err) {
+        console.error('[HomeView] 초기 데이터 로딩 실패:', err);
+      } finally {
+        // 성공/실패 모두 로딩 플래그는 반드시 해제한다.
+        // 실패 시엔 빈 상태로 홈이 그려지지만 최소한 사용자가 멈춰있다고
+        // 느끼지 않도록 하기 위함.
+        setIsLoading(false);
+      }
     })();
   }, [isAuthenticated]);
 
@@ -494,8 +518,23 @@ export default function HomeView({ isAuthenticated }: Props) {
         {/* ── 2. 로그인 섹션 (비로그인 시) ─────────────────────── */}
         {!isAuthenticated && <LoginSection />}
 
-        {/* ── 2. 시리즈 + 생성 (로그인 시) ─────────────────────── */}
-        {isAuthenticated && step === 'home' && (
+        {/* ── 로딩 플레이스홀더 ─────────────────────────────────
+            isAuthenticated && isLoading일 때만. 초기 데이터가 도착하기 전에
+            빈 시리즈 카드나 "첫 번째 시리즈를 시작해보세요" 문구가 노출되어
+            사용자가 로그인이 실패한 것으로 오해하거나 성급히 버튼을 누르는
+            것을 방지한다. */}
+        {isAuthenticated && isLoading && (
+          <section className="rounded-2xl border border-brand-100 bg-white p-8 shadow-sm">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
+              <p className="text-sm font-medium text-brand-500">이야기들을 불러오는 중…</p>
+              <p className="text-[11px] text-slate-400">잠시만 기다려 주세요</p>
+            </div>
+          </section>
+        )}
+
+        {/* ── 2. 시리즈 + 생성 (로그인 & 로딩 완료 시) ──────────── */}
+        {isAuthenticated && !isLoading && step === 'home' && (
           <section className="space-y-3">
             <div className="flex gap-2">
               {allSeries.length > 0 && (
@@ -602,8 +641,10 @@ export default function HomeView({ isAuthenticated }: Props) {
           />
         )}
 
-        {/* ── 지난 이야기 ──────────────────────────────────── */}
-        {novels.length > 0 && (
+        {/* ── 지난 이야기 ─────────────────────────────────────
+            로딩 중에는 숨긴다 (novels가 아직 빈 배열이라 자연 비노출이지만,
+            명시적으로 !isLoading 조건을 걸어둬 가독성 확보) */}
+        {!isLoading && novels.length > 0 && (
           <section ref={novelListSectionRef}>
             <h2 className="text-[11px] font-semibold text-brand-300 uppercase tracking-widest mb-3">
               {activeSeries?.title ?? '지난 이야기'}
