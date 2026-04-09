@@ -103,6 +103,9 @@ export interface NovelConfig {
 
 export type NovelOptions = NovelConfig;
 
+// 일러스트 생성 상태
+export type IllustrationStatus = 'pending' | 'generating' | 'done' | 'failed';
+
 export interface NovelRecord {
   id: string;
   seriesId: string;
@@ -111,6 +114,8 @@ export interface NovelRecord {
   config: NovelConfig;
   baseMood: MoodEmoji;
   createdAt: number;
+  illustrationUrl?: string | null;
+  illustrationStatus?: IllustrationStatus;
 }
 
 export type SavedNovel = NovelRecord;
