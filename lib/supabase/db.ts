@@ -3,7 +3,7 @@ import {
   MoodEntry, WeatherEntry,
   NovelRecord, Series, SeriesLastOptions,
   WorldBible, StoryBibleEntry,
-  MoodEmoji,
+  MoodEmoji, IllustrationStatus,
 } from '../types';
 import { generateId } from '../utils';
 
@@ -195,13 +195,15 @@ export async function loadActiveSeriesId(): Promise<string | null> {
 
 function rowToNovel(r: Record<string, unknown>): NovelRecord {
   return {
-    id:        r.id         as string,
-    seriesId:  r.series_id  as string,
-    title:     r.title      as string,
-    content:   r.content    as string,
-    config:    r.config     as NovelRecord['config'],
-    baseMood:  r.base_mood  as MoodEmoji,
-    createdAt: Number(r.created_at),
+    id:                 r.id                   as string,
+    seriesId:           r.series_id            as string,
+    title:              r.title                as string,
+    content:            r.content              as string,
+    config:             r.config               as NovelRecord['config'],
+    baseMood:           r.base_mood            as MoodEmoji,
+    createdAt:          Number(r.created_at),
+    illustrationUrl:    (r.illustration_url    as string | null) ?? null,
+    illustrationStatus: (r.illustration_status as IllustrationStatus | null) ?? 'pending',
   };
 }
 

@@ -37,19 +37,30 @@ export async function POST(req: NextRequest) {
 
     const readable = new ReadableStream({
       async start(controller) {
+        let chunkCount = 0;
+        let textCount = 0;
         try {
+          console.log('[/api/novel] stream start, model:', 'claude-opus-4-5');
           for await (const chunk of stream) {
+            chunkCount++;
+            if (chunkCount <= 5) {
+              console.log(`[/api/novel] chunk ${chunkCount} type:`, chunk.type,
+                chunk.type === 'content_block_delta' ? `delta=${chunk.delta.type}` : '');
+            }
             if (
               chunk.type === 'content_block_delta' &&
               chunk.delta.type === 'text_delta'
             ) {
+              textCount++;
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`)
               );
             }
           }
+          console.log(`[/api/novel] stream done. chunks=${chunkCount}, texts=${textCount}`);
           controller.enqueue(encoder.encode('event: done\n\n'));
-        } catch {
+        } catch (err) {
+          console.error('[/api/novel] stream error:', err);
           controller.enqueue(encoder.encode('event: error\n\n'));
         } finally {
           controller.close();
