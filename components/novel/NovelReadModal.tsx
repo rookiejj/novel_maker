@@ -11,6 +11,10 @@ interface Props {
 }
 
 export default function NovelReadModal({ novel, onClose }: Props) {
+  const hasIllustration = !!novel.illustrationUrl;
+  const isGenerating =
+    novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto
@@ -18,7 +22,7 @@ export default function NovelReadModal({ novel, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-3xl border border-brand-100 bg-white shadow-2xl"
+        className="w-full max-w-xl rounded-3xl border border-brand-100 bg-white shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
@@ -34,6 +38,28 @@ export default function NovelReadModal({ novel, onClose }: Props) {
           </div>
           <button onClick={onClose} className="text-slate-300 hover:text-slate-500 text-xl leading-none transition-colors">×</button>
         </div>
+
+        {/* 일러스트 */}
+        {(hasIllustration || isGenerating) && (
+          <div className="bg-brand-50/40 aspect-[4/3] w-full overflow-hidden">
+            {hasIllustration ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={novel.illustrationUrl!}
+                alt={novel.title}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
+                  <p className="text-xs text-brand-400">일러스트를 그리는 중…</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="px-6 py-6">
           <h1 className="mb-6 font-serif text-2xl font-bold leading-snug text-slate-900">{novel.title}</h1>
           <div className="prose prose-slate max-w-none font-serif leading-relaxed text-slate-700">

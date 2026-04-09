@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { anthropic } from '@/lib/anthropic';
 import { fal } from '@/lib/fal';
 import { createClient } from '@/lib/supabase/server';
@@ -15,6 +16,26 @@ const FAL_MODEL = 'fal-ai/flux/schnell';
 
 interface FalImage { url: string }
 interface FalResult { data: { images: FalImage[] } }
+
+// Storage 업로드 전용 service-role 클라이언트.
+// 쿠키 기반 createServerClient로는 storage RLS에 걸리는 경우가 있어,
+// RLS를 우회하는 service-role 키로 별도 인스턴스를 만든다.
+// user_id 검증은 위쪽 cookie 기반 클라이언트에서 이미 수행하므로,
+// 업로드 경로에 {user.id}/ 접두사만 붙이면 안전하다.
+// 이 키는 절대 클라이언트로 노출되면 안 된다 (NEXT_PUBLIC_ 접두사 없음).
+function getServiceRoleClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY 환경변수가 설정되어 있지 않습니다. ' +
+      '.env.local 및 Vercel 환경변수에 추가해 주세요.'
+    );
+  }
+  return createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -88,9 +109,12 @@ export async function POST(req: NextRequest) {
              : 'png';
     const bytes = new Uint8Array(await imgRes.arrayBuffer());
 
-    // ── 4. Supabase Storage 업로드 ──────────────────────────
+    // ── 4. Supabase Storage 업로드 (service-role) ─────────────
+    // 쿠키 기반 클라이언트는 storage RLS에 걸리므로 service-role 키로 우회한다.
+    // user_id 검증은 위의 cookie 기반 supabase로 이미 완료됐다.
+    const admin = getServiceRoleClient();
     const path = `${user.id}/${novelId}.${ext}`;
-    const { error: uploadErr } = await supabase.storage
+    const { error: uploadErr } = await admin.storage
       .from(BUCKET)
       .upload(path, bytes, {
         contentType,
@@ -100,7 +124,7 @@ export async function POST(req: NextRequest) {
     if (uploadErr) throw uploadErr;
 
     // ── 5. public URL 계산 ──────────────────────────────────
-    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
     const publicUrl = pub.publicUrl;
 
     // ── 6. novels 업데이트: url + status=done ───────────────

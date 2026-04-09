@@ -12,7 +12,7 @@ import LoginSection from '@/components/views/LoginSection';
 import {
   getTodayMood, loadMoodHistory, saveMood,
   loadNovels, deleteNovel,
-  loadAllSeries, saveSeries, saveActiveSeriesId, loadActiveSeriesId, incrementEpisodeCount,
+  loadAllSeries, saveSeries, deleteSeries, saveActiveSeriesId, loadActiveSeriesId, incrementEpisodeCount,
   getTodayWeather, saveWeather, updateSeriesLastOptions,
   loadWorldBible, saveWorldBible, mergeCharactersIntoWorldBible,
   loadStoryBibles, saveStoryBible, updateSeriesTitle,
@@ -31,6 +31,17 @@ type Step = 'home' | 'wizard' | 'viewing';
 
 interface Props {
   isAuthenticated: boolean;
+}
+
+// 일러스트 생성을 백그라운드로 트리거 (fire-and-forget).
+// 응답을 기다리지 않음 — 실패해도 UI는 막히지 않는다.
+function triggerIllustrationGeneration(novelId: string) {
+  fetch('/api/illustration', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ novelId }),
+    keepalive: true, // 탭 닫혀도 요청은 계속 진행
+  }).catch(err => console.warn('[illustration trigger]', err));
 }
 
 export default function HomeView({ isAuthenticated }: Props) {
@@ -94,6 +105,40 @@ export default function HomeView({ isAuthenticated }: Props) {
     })();
   }, [isAuthenticated]);
 
+  // ─── 일러스트 상태 폴링 ────────────────────────────────────────────────────
+  // novels 중에 illustrationStatus가 pending 또는 generating인 항목이 있으면
+  // 4초마다 novels를 새로 읽어 상태 변화를 감지한다.
+  // 모든 소설의 상태가 done/failed로 수렴하면 자동으로 폴링이 멈춘다.
+  useEffect(() => {
+    if (!isAuthenticated || !activeSeries) return;
+
+    const needsPolling = novels.some(n =>
+      n.illustrationStatus === 'pending' || n.illustrationStatus === 'generating'
+    );
+    if (!needsPolling) return;
+
+    const seriesId = activeSeries.id;
+    let cancelled = false;
+
+    const timer = setInterval(async () => {
+      try {
+        const fresh = await loadNovels(seriesId);
+        if (cancelled) return;
+        setNovels(fresh);
+        // 읽기 모달이 열려 있고 해당 소설의 일러스트가 방금 완성됐다면 동기화
+        setReadingNovel(prev => {
+          if (!prev) return prev;
+          const updated = fresh.find(n => n.id === prev.id);
+          return updated ?? prev;
+        });
+      } catch (err) {
+        console.warn('[illustration polling]', err);
+      }
+    }, 4000);
+
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [novels, activeSeries, isAuthenticated]);
+
   async function handleMoodSelect(emoji: MoodEmoji) {
     const entry: MoodEntry = {
       date: new Date().toISOString().slice(0, 10),
@@ -129,8 +174,15 @@ export default function HomeView({ isAuthenticated }: Props) {
         episodeCount:      0,
         createdAt:         Date.now(),
       };
-      pendingNewSeriesRef.current = newSeries;
+      // 새 시리즈는 즉시 DB에 저장한다.
+      // novels.series_id는 NOT NULL FK이므로 소설 저장 전에 시리즈 row가
+      // 반드시 존재해야 한다. 사용자가 저장 없이 취소하면 handleViewerClose에서
+      // 롤백(deleteSeries)한다.
+      await saveSeries(newSeries);
+      await saveActiveSeriesId(newSeries.id);
+      pendingNewSeriesRef.current = newSeries; // 롤백 대상 플래그
       setActiveSeries(newSeries);
+      setAllSeries(await loadAllSeries());
       setNovels([]);
       series = newSeries;
     }
@@ -156,11 +208,27 @@ export default function HomeView({ isAuthenticated }: Props) {
   }
 
   async function handleViewerClose() {
+    // 새 시리즈를 만들었는데 소설 저장 없이 취소한 경우 → 시리즈 롤백
     if (pendingNewSeriesRef.current) {
+      const orphanSeriesId = pendingNewSeriesRef.current.id;
       const prev = prevActiveSeriesRef.current;
+      pendingNewSeriesRef.current = null;
+
+      // DB에서 빈 시리즈 삭제 (active_series FK는 ON DELETE 정책에 따라 정리됨)
+      try {
+        await deleteSeries(orphanSeriesId);
+        if (prev) {
+          await saveActiveSeriesId(prev.id);
+        } else {
+          await saveActiveSeriesId(null);
+        }
+      } catch (err) {
+        console.warn('[handleViewerClose] series rollback failed:', err);
+      }
+
+      setAllSeries(await loadAllSeries());
       setActiveSeries(prev);
       setNovels(prev ? await loadNovels(prev.id) : []);
-      pendingNewSeriesRef.current = null;
     }
     setStep('home');
   }
@@ -168,14 +236,11 @@ export default function HomeView({ isAuthenticated }: Props) {
   async function handleNovelSaved(record: NovelRecord) {
     const seriesId = record.seriesId;
 
-    // 새 시리즈는 이 시점에 처음으로 DB에 저장
-    if (pendingNewSeriesRef.current?.id === seriesId) {
-      await saveSeries(pendingNewSeriesRef.current);
-      await saveActiveSeriesId(seriesId);
-      pendingNewSeriesRef.current = null;
-    }
+    // 새 시리즈는 이미 handleWizardComplete에서 DB에 저장됐다.
+    // 소설 저장이 성공했으므로 롤백 대상에서 해제.
+    pendingNewSeriesRef.current = null;
 
-    // 시리즈 존재가 보장된 후 episode count 증가
+    // episode count 증가
     await incrementEpisodeCount(seriesId);
 
     // 위저드 설정 저장
@@ -192,6 +257,11 @@ export default function HomeView({ isAuthenticated }: Props) {
     setAllSeries(freshSeries);
     setActiveSeries(freshSeries.find(s => s.id === seriesId) ?? null);
     setNovels(await loadNovels(seriesId));
+
+    // 일러스트 생성 트리거 (fire-and-forget).
+    // 서버가 백그라운드로 Haiku → Fal → Storage 업로드 → DB 갱신을 진행하고,
+    // 클라이언트는 아래 useEffect의 폴링으로 상태 변화를 감지한다.
+    triggerIllustrationGeneration(record.id);
 
     const worldBible   = await loadWorldBible(seriesId);
     const isFirstNovel = !worldBible;

@@ -16,12 +16,38 @@ export default function NovelCard({ novel, onRead, onDelete }: Props) {
   const [confirming, setConfirming] = useState(false);
   const preview = novel.content.slice(0, 100).trim() + (novel.content.length > 100 ? '…' : '');
 
+  const hasIllustration = !!novel.illustrationUrl;
+  const isGenerating =
+    novel.illustrationStatus === 'pending' || novel.illustrationStatus === 'generating';
+
   return (
     <article
       onClick={() => !confirming && onRead(novel)}
       className="group relative rounded-2xl border border-brand-100 bg-white p-4 shadow-sm
                  transition-all hover:border-brand-200 hover:shadow-md cursor-pointer"
     >
+      {/* 일러스트 썸네일 */}
+      {(hasIllustration || isGenerating) && (
+        <div className="mb-3 overflow-hidden rounded-xl border border-brand-50 bg-brand-50/40 aspect-[4/3]">
+          {hasIllustration ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={novel.illustrationUrl!}
+              alt={novel.title}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
+                <p className="text-[11px] text-brand-400">일러스트 그리는 중…</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 메타 + 날짜 */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
