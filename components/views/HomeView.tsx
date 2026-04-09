@@ -8,6 +8,7 @@ import NovelViewer from '@/components/novel/NovelViewer';
 import NovelCard from '@/components/novel/NovelCard';
 import NovelReadModal from '@/components/novel/NovelReadModal';
 import SeriesPickerModal from '@/components/novel/SeriesPickerModal';
+import LoginSection from '@/components/views/LoginSection';
 import {
   getTodayMood, loadMoodHistory, saveMood,
   loadNovels, deleteNovel,
@@ -28,7 +29,11 @@ import WeatherSelector from '@/components/weather/WeatherSelector';
 
 type Step = 'home' | 'wizard' | 'viewing';
 
-export default function HomeView() {
+interface Props {
+  isAuthenticated: boolean;
+}
+
+export default function HomeView({ isAuthenticated }: Props) {
   const [todayMood,        setTodayMood]        = useState<MoodEntry | null>(null);
   const [moodHistory,      setMoodHistory]      = useState<MoodEntry[]>([]);
   const [allSeries,        setAllSeries]        = useState<Series[]>([]);
@@ -45,6 +50,17 @@ export default function HomeView() {
 
   useEffect(() => {
     (async () => {
+      // 비로그인: Supabase 접근 없이 UI용 기본값만 세팅하고 종료.
+      if (!isAuthenticated) {
+        setTodayMood({
+          date: new Date().toISOString().slice(0, 10),
+          emoji: '😊',
+          label: MOOD_MAP['😊'].label,
+        });
+        setTodayWeather('맑음');
+        return;
+      }
+
       // 기분 기본값: 행복해
       const savedMood = await getTodayMood();
       if (savedMood) {
@@ -76,7 +92,7 @@ export default function HomeView() {
       setActiveSeries(active);
       setNovels(active ? await loadNovels(active.id) : []);
     })();
-  }, []);
+  }, [isAuthenticated]);
 
   async function handleMoodSelect(emoji: MoodEmoji) {
     const entry: MoodEntry = {
@@ -85,6 +101,9 @@ export default function HomeView() {
       label: MOOD_MAP[emoji].label,
     };
     setTodayMood(entry);
+    // 저장은 MoodSelector 내부(moodStorage.saveMood)에서 처리된다.
+    // 비로그인 상태에서는 히스토리 로딩을 생략한다.
+    if (!isAuthenticated) return;
     setMoodHistory(await loadMoodHistory());
   }
 
@@ -245,7 +264,7 @@ export default function HomeView() {
 
   return (
     <div className="min-h-screen bg-[#F0EEFF] text-slate-900">
-      <Header />
+      <Header isAuthenticated={isAuthenticated} />
 
       <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
 
@@ -266,8 +285,11 @@ export default function HomeView() {
           <div className="flex-1 h-px bg-brand-100" />
         </div>
 
-        {/* ── 2. 시리즈 + 생성 ─────────────────────────────── */}
-        {step === 'home' && (
+        {/* ── 2. 로그인 섹션 (비로그인 시) ─────────────────────── */}
+        {!isAuthenticated && <LoginSection />}
+
+        {/* ── 2. 시리즈 + 생성 (로그인 시) ─────────────────────── */}
+        {isAuthenticated && step === 'home' && (
           <section className="space-y-3">
             <div className="flex gap-2">
               {allSeries.length > 0 && (

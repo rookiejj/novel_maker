@@ -2,14 +2,16 @@
 
 import { createClient } from '@/lib/supabase/client';
 
-export default function Header() {
+interface Props {
+  isAuthenticated: boolean;
+}
+
+export default function Header({ isAuthenticated }: Props) {
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    // 하드 리로드로 완전히 새 페이지를 로드한다.
-    // router.refresh()는 서버 컴포넌트만 다시 렌더하고 JS 힙은 남아 있어서,
-    // Google GSI가 내부적으로 캐시한 nonce/initialize 상태 때문에
-    // 재로그인 시 Nonces mismatch 에러가 난다. 하드 리로드로 완전 리셋.
+    // 하드 리로드로 JS 힙을 완전히 리셋한다.
+    // (Google OAuth / Supabase 세션 관련 전역 상태 정리)
     window.location.href = '/';
   }
 
@@ -22,13 +24,15 @@ export default function Header() {
             아무도 읽지 않는 이야기를 씁니다
           </span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-[11px] font-medium text-brand-400 hover:text-brand-600
-                     px-2.5 py-1 rounded-md hover:bg-brand-50 transition-colors"
-        >
-          로그아웃
-        </button>
+        {isAuthenticated && (
+          <button
+            onClick={handleLogout}
+            className="text-[11px] font-medium text-brand-400 hover:text-brand-600
+                       px-2.5 py-1 rounded-md hover:bg-brand-50 transition-colors"
+          >
+            로그아웃
+          </button>
+        )}
       </div>
     </header>
   );
