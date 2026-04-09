@@ -27,6 +27,17 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
   // · 모달 콘텐츠: max-h로 높이 제한 + 내부에 스크롤 컨테이너를 가짐.
   //   → 스크롤은 오직 모달 본문 영역에서만 발생.
   // · body 스크롤은 훅이 잠가둠 → 마우스를 모달 바깥에 놓아도 뒤 화면 안 움직임.
+  //
+  // 높이 계산 (모바일 대응)
+  // ─────────────────────
+  // · 100vh는 iOS Safari/모바일 Chrome에서 주소창 포함한 "큰" 뷰포트 기준이라
+  //   실제 가시 영역보다 크다. 그대로 쓰면 모달 하단이 화면 밖으로 잘림.
+  // · 100dvh(dynamic viewport height)는 브라우저 UI를 제외한 실제 가시 영역.
+  //   iOS 15.4+ / Chrome 108+ / Samsung Internet 최신 지원.
+  // · 구형 브라우저 fallback을 위해 vh를 먼저, dvh를 뒤에 선언 — 지원 시 dvh가
+  //   cascade로 덮어쓴다.
+  // · backdrop 패딩은 pt-16(4rem) 상단 + p-4(1rem) 하단 = 5rem.
+  //   모달 max-h에서도 동일하게 5rem을 빼야 패딩과 합쳐 화면을 넘지 않음.
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center
@@ -34,7 +45,7 @@ export default function NovelReadModal({ novel, onClose, onRetryIllustration }: 
       onClick={dismiss}
     >
       <div
-        className="flex w-full max-w-xl max-h-[calc(100vh-5rem)] flex-col
+        className="modal-max-h flex w-full max-w-xl flex-col
                    rounded-3xl border border-brand-100 bg-white shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
