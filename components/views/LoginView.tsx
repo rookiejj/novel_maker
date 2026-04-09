@@ -1,36 +1,12 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
-import Script from 'next/script';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-interface CredentialResponse {
-  credential: string;
-  select_by?: string;
-}
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            callback: (response: CredentialResponse) => void;
-            nonce?: string;
-            use_fedcm_for_prompt?: boolean;
-            auto_select?: boolean;
-          }) => void;
-          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
-
 // ─── 인앱 브라우저 감지 ────────────────────────────────────────────────────────
+// UA에 명시적인 앱 식별자가 있는 경우만 감지한다. 텔레그램처럼 UA를 위장하는
+// 앱은 감지 불가능하지만, Supabase OAuth redirect flow는 대부분의 WebView에서
+// 정상 동작하므로 감지 실패해도 결국 로그인은 가능하다.
 type InAppInfo = {
   isInApp: boolean;
   isAndroid: boolean;
@@ -43,7 +19,7 @@ function detectInAppBrowser(ua: string): InAppInfo {
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
   let name: string | null = null;
-  if (/KAKAOTALK/i.test(ua))            name = '카카오톡';
+  if      (/KAKAOTALK/i.test(ua))        name = '카카오톡';
   else if (/FBAN|FBAV|FB_IAB/i.test(ua)) name = 'Facebook';
   else if (/Instagram/i.test(ua))        name = 'Instagram';
   else if (/Line/i.test(ua))             name = 'LINE';
@@ -55,113 +31,49 @@ function detectInAppBrowser(ua: string): InAppInfo {
 }
 
 export default function LoginView() {
-  const router = useRouter();
-  const buttonRef = useRef<HTMLDivElement>(null);
-  const rawNonceRef = useRef<string | null>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(
-    // 이전 마운트에서 이미 GSI 스크립트가 로드돼 있으면 true로 시작.
-    // (로그아웃 → router.refresh() 시 <Script>가 재마운트되지만
-    //  strategy="afterInteractive"라 onLoad가 다시 호출되지 않기 때문)
-    typeof window !== 'undefined' && !!window.google?.accounts?.id,
-  );
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [inAppInfo, setInAppInfo] = useState<InAppInfo | null>(null);
 
-  // 인앱 브라우저 감지 및 처리
+  // 인앱 브라우저 감지 + Android는 Chrome으로 자동 전환
   useEffect(() => {
     const info = detectInAppBrowser(navigator.userAgent);
     setInAppInfo(info);
 
-    if (!info.isInApp) return;
-
-    // 안드로이드: intent:// URL로 Chrome 강제 실행
-    if (info.isAndroid) {
+    if (info.isInApp && info.isAndroid) {
+      // intent:// 스킴으로 Chrome 강제 실행
       const url = window.location.href.replace(/^https?:\/\//, '');
       window.location.href =
         `intent://${url}#Intent;scheme=https;package=com.android.chrome;end`;
     }
-    // iOS: 안내문구만 표시 (아래 JSX에서 처리)
+    // iOS 인앱: 아래 JSX에서 안내문만 표시
   }, []);
 
-  const generateNonce = useCallback(async (): Promise<{ raw: string; hashed: string }> => {
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    const raw = Array.from(randomBytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    const encoder = new TextEncoder();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(raw));
-    const hashed = Array.from(new Uint8Array(hashBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    return { raw, hashed };
-  }, []);
-
-  const handleCredential = useCallback(async (response: CredentialResponse) => {
+  async function handleGoogleLogin() {
+    setErrorMsg(null);
+    setLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        token: response.credential,
-        nonce: rawNonceRef.current ?? undefined,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: { prompt: 'select_account' },
+        },
       });
       if (error) {
-        console.error('[Supabase signInWithIdToken]', error);
-        setErrorMsg(`로그인 실패: ${error.message}`);
-        return;
+        console.error('[signInWithOAuth]', error);
+        setErrorMsg(`로그인 시작 실패: ${error.message}`);
+        setLoading(false);
       }
-      // 루트에서 통합 렌더 중이므로, 서버가 다시 세션을 읽어
-      // HomeView를 내려보내도록 refresh만 호출한다.
-      router.refresh();
+      // 성공 시 브라우저가 구글로 이동하므로 여기선 아무것도 안 함
     } catch (err) {
-      console.error('[GSI callback]', err);
+      console.error('[LoginView] unexpected error:', err);
       setErrorMsg('로그인 중 오류가 발생했습니다.');
+      setLoading(false);
     }
-  }, [router]);
+  }
 
-  // GSI 초기화 (인앱 브라우저에서는 실행 안 함)
-  useEffect(() => {
-    if (!scriptLoaded) return;
-    if (!buttonRef.current) return;
-    if (inAppInfo?.isInApp) return; // 인앱이면 스킵
-    if (!window.google) {
-      setErrorMsg('Google 스크립트 로드 실패');
-      return;
-    }
-
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      setErrorMsg('환경변수 NEXT_PUBLIC_GOOGLE_CLIENT_ID 미설정');
-      return;
-    }
-
-    (async () => {
-      const { raw, hashed } = await generateNonce();
-      rawNonceRef.current = raw;
-
-      window.google!.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredential,
-        nonce: hashed,
-        use_fedcm_for_prompt: true,
-        auto_select: false,
-      });
-
-      window.google!.accounts.id.renderButton(buttonRef.current!, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'pill',
-        logo_alignment: 'left',
-        locale: 'ko',
-        width: 280,
-      });
-
-      window.google!.accounts.id.prompt();
-    })();
-  }, [scriptLoaded, generateNonce, handleCredential, inAppInfo]);
-
-  // URL 복사 (iOS 안내용)
   async function handleCopyUrl() {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -209,7 +121,7 @@ export default function LoginView() {
     );
   }
 
-  // ─── 안드로이드 인앱 브라우저: Chrome으로 리다이렉트 중 ──────────────────────
+  // ─── Android 인앱 브라우저: Chrome 전환 중 안내 ──────────────────────────
   if (inAppInfo?.isInApp && inAppInfo.isAndroid) {
     return (
       <div className="min-h-screen bg-[#F0EEFF] flex flex-col items-center justify-center px-6">
@@ -234,12 +146,6 @@ export default function LoginView() {
   // ─── 정상 로그인 화면 ───────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#F0EEFF] flex flex-col items-center justify-center px-4">
-      <Script
-        src="https://accounts.google.com/gsi/client"
-        strategy="afterInteractive"
-        onLoad={() => setScriptLoaded(true)}
-        onError={() => setErrorMsg('Google 스크립트 로드 실패')}
-      />
       <div className="w-full max-w-sm space-y-8 text-center">
         <div>
           <h1 className="text-2xl font-bold text-brand-700">한편</h1>
@@ -248,8 +154,20 @@ export default function LoginView() {
           </p>
         </div>
 
-        <div className="flex justify-center min-h-[44px]">
-          <div ref={buttonRef} />
+        <div className="flex justify-center">
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="flex items-center justify-center gap-3 w-full max-w-[280px]
+                       rounded-full border border-slate-200 bg-white px-5 py-3
+                       text-sm font-medium text-slate-700 shadow-sm
+                       hover:bg-slate-50 active:scale-[0.98]
+                       disabled:opacity-60 disabled:cursor-not-allowed
+                       transition-all"
+          >
+            <GoogleIcon />
+            <span>{loading ? '이동 중…' : 'Google 계정으로 계속하기'}</span>
+          </button>
         </div>
 
         {errorMsg && (
@@ -261,5 +179,17 @@ export default function LoginView() {
         </p>
       </div>
     </div>
+  );
+}
+
+// 공식 Google "G" 로고
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
   );
 }

@@ -1,17 +1,16 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export default function Header() {
-  const router = useRouter();
-
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    // 루트에서 통합 렌더 중이므로 refresh만 하면
-    // 서버가 비로그인 상태를 감지해 LoginView를 내려보낸다.
-    router.refresh();
+    // 하드 리로드로 완전히 새 페이지를 로드한다.
+    // router.refresh()는 서버 컴포넌트만 다시 렌더하고 JS 힙은 남아 있어서,
+    // Google GSI가 내부적으로 캐시한 nonce/initialize 상태 때문에
+    // 재로그인 시 Nonces mismatch 에러가 난다. 하드 리로드로 완전 리셋.
+    window.location.href = '/';
   }
 
   return (
