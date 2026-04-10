@@ -6,13 +6,16 @@ import { createClient } from '@/lib/supabase/server';
 import {
   buildIllustrationSystemPrompt,
   buildIllustrationUserMessage,
+  buildSheetEnrichmentSystemPrompt,
+  buildCharacterClause,
 } from '@/prompts/illustration';
+import type { CharacterSheet, Character, NovelConfig as _NC } from '@/lib/types';
 import type { NovelConfig } from '@/lib/types';
 
 export const maxDuration = 300;
 
 const BUCKET = 'novel-illustrations';
-const FAL_MODEL = 'fal-ai/flux/schnell';
+const FAL_MODEL = 'fal-ai/flux/dev';
 
 interface FalImage { url: string }
 interface FalResult { data: { images: FalImage[] } }
@@ -77,20 +80,76 @@ export async function POST(req: NextRequest) {
     .eq('user_id', user.id);
 
   try {
+    // ── 0. 캐릭터 시트 로드/생성 (시리즈 일관성) ──────────
+    const config = novel.config as NovelConfig;
+    let characterSheet: CharacterSheet | null = null;
+    if (config.seriesId) {
+      const { data: seriesRow } = await supabase
+        .from('series').select('last_options')
+        .eq('id', config.seriesId).eq('user_id', user.id).maybeSingle();
+      const lastOpts = (seriesRow?.last_options ?? {}) as { characterSheet?: CharacterSheet };
+      characterSheet = lastOpts.characterSheet ?? null;
+      if (!characterSheet) {
+        characterSheet = createBaseSheet(config);
+        const enriched = await enrichSheetFromNovel(characterSheet, novel.content as string);
+        if (enriched) characterSheet = enriched;
+
+        // ── 시트 저장: service-role로 직접 update (API route 컨텍스트) ──
+        // db.ts 함수는 클라이언트 컴포넌트 전용(쿠키 기반 유저 컨텍스트에 의존)이라
+        // API route에서는 uid()가 null을 반환해 silent-fail한다. 따라서 여기서
+        // 이미 검증된 user.id와 service-role 키로 직접 업데이트한다.
+        try {
+          const admin = getServiceRoleClient();
+          const { data: seriesRow2 } = await admin.from('series')
+            .select('last_options')
+            .eq('id', config.seriesId).eq('user_id', user.id).maybeSingle();
+          const prev = (seriesRow2?.last_options ?? {}) as Record<string, unknown>;
+          const prevSheet = prev.characterSheet as CharacterSheet | undefined;
+
+          // immutable 머지: 기존 시트가 있으면 gender/name/role/pronoun 보존
+          let finalSheet = characterSheet;
+          if (prevSheet && Array.isArray(prevSheet.characters)) {
+            finalSheet = {
+              ...characterSheet,
+              characters: characterSheet.characters.map(c => {
+                const locked = prevSheet.characters.find(
+                  p => p.name === c.name || p.role === c.role,
+                );
+                if (!locked) return c;
+                return { ...c, name: locked.name, role: locked.role, gender: locked.gender, pronoun: locked.pronoun };
+              }),
+            };
+          }
+
+          const merged = { ...prev, characterSheet: finalSheet };
+          const { error: saveErr, data: updated } = await admin.from('series')
+            .update({ last_options: merged })
+            .eq('id', config.seriesId).eq('user_id', user.id)
+            .select();
+          if (saveErr) console.error('[route] character sheet save error:', saveErr);
+          // 이후 로직에서 사용하도록 머지된 시트로 교체
+          characterSheet = finalSheet;
+        } catch (e) {
+          console.error('[route] character sheet save exception:', e);
+        }
+      }
+    }
     // ── 1. Claude Haiku로 이미지 프롬프트 생성 ─────────────
     const imagePrompt = await generateImagePrompt({
       title: novel.title as string,
       content: novel.content as string,
-      config: novel.config as NovelConfig,
+      config,
+      characterSheet,
     });
-    console.log('[/api/illustration] image prompt:', imagePrompt);
+    const finalPrompt = imagePrompt + buildCharacterClause(characterSheet);
 
     // ── 2. Fal.ai로 이미지 생성 ─────────────────────────────
     const falResult = await fal.subscribe(FAL_MODEL, {
       input: {
-        prompt: imagePrompt,
+        prompt: finalPrompt,
         image_size: 'landscape_4_3',
-        num_inference_steps: 4,
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
         num_images: 1,
         enable_safety_checker: true,
       },
@@ -156,9 +215,13 @@ async function generateImagePrompt(params: {
   title: string;
   content: string;
   config: NovelConfig;
+  characterSheet?: CharacterSheet | null;
 }): Promise<string> {
-  // 장르에 따라 스타일 키워드가 달라진다 (동화는 수채화 그림책 톤).
-  const system = buildIllustrationSystemPrompt(params.config.genre);
+  const system = buildIllustrationSystemPrompt(
+    params.config.genre,
+    params.config.illustrationStyle ?? 'anime',
+    params.characterSheet,
+  );
   const userMsg = buildIllustrationUserMessage(params);
 
   const msg = await anthropic.messages.create({
@@ -179,4 +242,86 @@ async function generateImagePrompt(params: {
     .replace(/^```[a-z]*\n?/i, '')
     .replace(/\n?```$/i, '')
     .trim();
+}
+
+
+function createBaseSheet(config: NovelConfig): CharacterSheet {
+  const isBL = config.genre === 'BL';
+  const protagGender: 'male' | 'female' =
+    isBL ? 'male' : (config.protagonistGender === '여성' ? 'female' : 'male');
+
+  const chars: Character[] = [{
+    name: config.protagonistName ?? '주인공',
+    role: 'protagonist',
+    gender: protagGender,
+    pronoun: protagGender === 'male' ? 'he' : 'she',
+    ageRange: '20s',
+    appearance: protagGender === 'male'
+      ? 'young Korean man, short black hair, slim athletic build, calm confident expression'
+      : 'young Korean woman, long black hair, slender build, gentle warm expression',
+    outfit: 'casual modern clothing, fully dressed, tasteful',
+  }];
+
+  if (isBL) {
+    chars.push({
+      name: '상대역',
+      role: 'supporting',
+      gender: 'male',
+      pronoun: 'he',
+      ageRange: '20s',
+      appearance: 'young Korean man, medium brown wavy hair, tall build, warm gentle expression',
+      outfit: 'smart casual clothing, fully dressed',
+    });
+  }
+  return { characters: chars };
+}
+
+async function enrichSheetFromNovel(
+  base: CharacterSheet, content: string,
+): Promise<CharacterSheet | null> {
+  try {
+    const system = buildSheetEnrichmentSystemPrompt();
+    const userMsg = `# 기존 시트
+${JSON.stringify(base, null, 2)}
+
+# 본문
+${content.slice(0, 4000)}`;
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1000,
+      temperature: 0.2,
+      system,
+      messages: [{ role: 'user', content: userMsg }],
+    });
+    const block = msg.content.find(b => b.type === 'text');
+    if (!block || block.type !== 'text') {
+      return base;
+    }
+    const match = block.text.match(/\{[\s\S]*\}/);
+    if (!match) return base;
+    const parsed = JSON.parse(match[0]) as CharacterSheet;
+    if (!parsed.characters || !Array.isArray(parsed.characters) || parsed.characters.length === 0) {
+      return base;
+    }
+    // 보강: base의 immutable 필드(gender/name/role/pronoun)로 덮어쓰고 디테일만 merge
+    const merged: CharacterSheet = {
+      ...parsed,
+      characters: base.characters.map(b => {
+        const p = parsed.characters.find(c => c.role === b.role) ?? parsed.characters[0];
+        return {
+          name: b.name,
+          role: b.role,
+          gender: b.gender,
+          pronoun: b.pronoun,
+          ageRange: p?.ageRange || b.ageRange,
+          appearance: p?.appearance || b.appearance,
+          outfit: p?.outfit || b.outfit,
+        };
+      }),
+    };
+    return merged;
+  } catch (e) {
+    console.error('[enrichSheet] error, keeping base:', e);
+    return base;
+  }
 }

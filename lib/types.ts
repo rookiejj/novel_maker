@@ -63,7 +63,29 @@ export type NovelLength =
 
 export type SeriesLength = 10 | 20 | 30;
 
-export type ProtagGender = '남성' | '여성' | '중성';
+export type ProtagGender = '남성' | '여성';
+
+export type IllustrationStyle = 'anime' | 'realistic';
+
+export interface Character {
+  name: string;                        // 한글 이름 (본문 일관성용)
+  role: 'protagonist' | 'supporting';
+  gender: 'male' | 'female';           // enum 고정, 절대 번복 불가
+  pronoun: 'he' | 'she';
+  ageRange: string;                    // e.g. "20s", "teens", "30s"
+  appearance: string;                  // 영어 외형 키워드 (머리/눈/체형)
+  outfit: string;                      // 영어 복장 키워드
+}
+
+export interface CharacterSheet {
+  characters: Character[];             // 주인공 + 주요 조연 (2~4명)
+  styleNotes?: string;                 // 분위기/배경 영어 키워드
+}
+
+export const ILLUSTRATION_STYLE_MAP: Record<IllustrationStyle, { icon: string; label: string }> = {
+  'anime':     { icon: '🎨', label: '애니메이션' },
+  'realistic': { icon: '📷', label: '실사'       },
+};
 
 export const GENRE_MAP: Record<Genre, { icon: string; label: string }> = {
   '로맨스':   { icon: '💕', label: '로맨스'   },
@@ -101,6 +123,8 @@ export interface NovelConfig {
   currentEpisode?: number;       // 이번 편 번호 (1-based)
   worldBible?: WorldBible | null;
   storyBibles?: StoryBibleEntry[];
+  illustrationStyle?: IllustrationStyle;
+  characterSheet?: CharacterSheet;
 }
 
 export type NovelOptions = NovelConfig;
@@ -138,6 +162,8 @@ export interface Series {
   protagonistGender: ProtagGender;
   totalEpisodes: SeriesLength;
   episodeCount: number;
+  illustrationStyle?: IllustrationStyle;
+  characterSheet?: CharacterSheet;
   lastOptions?: SeriesLastOptions;  // 직전 위저드 설정 (다음 편에 기본값으로 사용)
   createdAt: number;
 }

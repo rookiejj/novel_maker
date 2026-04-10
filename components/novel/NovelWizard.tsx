@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender, SeriesLastOptions } from '@/lib/types';
+import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender, SeriesLastOptions, IllustrationStyle } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
 
 const GENRES: Genre[]       = ['로맨스', 'BL', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사', '동화'];
@@ -21,13 +21,14 @@ interface Props {
   lockedProtagonistName?: string;
   lockedTotalEpisodes?:   SeriesLength;
   lockedGender?:          ProtagGender;
+  lockedIllustStyle?:     IllustrationStyle;
   lastOptions?:           SeriesLastOptions; // 직전 설정 (기존 연재)
   onGenerate: (options: NovelOptions) => void;
   onCancel:   () => void;
 }
 
 export default function NovelWizard({
-  lockedGenre, lockedProtagonistName, lockedGender, lockedTotalEpisodes, lastOptions, onGenerate, onCancel,
+  lockedGenre, lockedProtagonistName, lockedGender, lockedIllustStyle, lockedTotalEpisodes, lastOptions, onGenerate, onCancel,
 }: Props) {
   const [genre,           setGenre]           = useState<Genre>(lockedGenre ?? '일상');
   const [atmosphere,      setAtmosphere]      = useState<Atmosphere>(lastOptions?.atmosphere ?? '잔잔한');
@@ -35,7 +36,8 @@ export default function NovelWizard({
   const [length,          setLength]          = useState<NovelLength>(lastOptions?.length ?? '중편 (1500자)');
   const [protagonistName, setProtagonistName] = useState('');
   const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(10);
-  const [gender,          setGender]          = useState<ProtagGender | null>('중성');
+  const [gender,          setGender]          = useState<ProtagGender | null>('남성');
+  const [illustStyle,     setIllustStyle]     = useState<IllustrationStyle>(lockedIllustStyle ?? 'anime');
 
   // BL 장르는 두 남성 주인공이 전제이므로 성별을 '남성'으로 고정
   useEffect(() => {
@@ -43,6 +45,13 @@ export default function NovelWizard({
       setGender('남성');
     }
   }, [genre, gender]);
+
+  // 동화 장르는 수채화 그림책 톤이 필수이므로 일러스트 스타일을 '애니메이션'으로 고정
+  useEffect(() => {
+    if (genre === '동화' && illustStyle !== 'anime') {
+      setIllustStyle('anime');
+    }
+  }, [genre, illustStyle]);
 
   const isNewSeries = !lockedGenre;
 
@@ -115,7 +124,7 @@ export default function NovelWizard({
               <span className="ml-1.5 text-rose-400 font-semibold">*</span>
             </label>
             <div className="flex gap-2">
-              {(['남성', '여성', '중성'] as ProtagGender[]).map(g => (
+              {(['남성', '여성'] as ProtagGender[]).map(g => (
                 <button
                   key={g}
                   onClick={() => setGender(g)}
@@ -126,13 +135,38 @@ export default function NovelWizard({
                       : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
                   } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-200`}
                 >
-                  {g === '남성' ? '👦 남성' : g === '여성' ? '👧 여성' : '🧑 중성'}
+                  {g === '남성' ? '👦 남성' : '👧 여성'}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 총 편수 */}
+          {/* 일러스트 스타일 (새 시리즈만 선택 가능) */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">
+              일러스트 스타일
+              <span className="ml-1.5 text-slate-400 font-normal">
+                {genre === '동화' ? '(동화는 수채화 그림책 톤 고정)' : '(시리즈 전체에 적용)'}
+              </span>
+            </label>
+            <div className="flex gap-2">
+              {(['anime', 'realistic'] as IllustrationStyle[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setIllustStyle(s)}
+                  disabled={genre === '동화' && s === 'realistic'}
+                  className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                    illustStyle === s
+                      ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                  } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-200`}
+                >
+                  {s === 'anime' ? '🎨 애니메이션' : '📷 실사'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-500">시리즈 총 편수</label>
             <div className="flex gap-3">
@@ -242,6 +276,7 @@ export default function NovelWizard({
               genre, atmosphere, style, length,
               protagonistName:  isNewSeries ? (protagonistName.trim() || undefined) : lockedProtagonistName,
               protagonistGender: isNewSeries ? gender! : lockedGender,
+              illustrationStyle: isNewSeries ? illustStyle : (lockedIllustStyle ?? 'anime'),
               totalEpisodes:    isNewSeries ? totalEpisodes : lockedTotalEpisodes,
             });
           }}

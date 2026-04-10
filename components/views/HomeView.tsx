@@ -262,9 +262,10 @@ export default function HomeView({ isAuthenticated }: Props) {
         title:             `${options.genre} 연재`,
         genre:             options.genre,
         protagonistName:   options.protagonistName,
-        protagonistGender: (options.protagonistGender as ProtagGender) ?? '중성',
+        protagonistGender: (options.protagonistGender as ProtagGender) ?? '남성',
         totalEpisodes:     (options.totalEpisodes as SeriesLength) ?? 20,
         episodeCount:      0,
+        illustrationStyle: options.illustrationStyle ?? 'anime',
         createdAt:         Date.now(),
       };
       // 새 시리즈는 즉시 DB에 저장한다.
@@ -649,6 +650,7 @@ export default function HomeView({ isAuthenticated }: Props) {
             lockedGenre={activeSeries?.genre}
             lockedProtagonistName={activeSeries?.protagonistName}
             lockedGender={activeSeries?.protagonistGender}
+            lockedIllustStyle={activeSeries?.illustrationStyle}
             lockedTotalEpisodes={activeSeries?.totalEpisodes}
             lastOptions={activeSeries?.lastOptions}
             onGenerate={handleWizardComplete}

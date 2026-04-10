@@ -102,6 +102,7 @@ export async function getTodayWeather(): Promise<WeatherEntry | null> {
 // ─── Series ───────────────────────────────────────────────────────────────────
 
 function rowToSeries(r: Record<string, unknown>): Series {
+  const lastOpts = (r.last_options as (SeriesLastOptions & { illustrationStyle?: 'anime'|'realistic'; characterSheet?: import('@/lib/types').CharacterSheet }) | null) ?? undefined;
   return {
     id:                r.id                  as string,
     title:             r.title               as string,
@@ -110,7 +111,9 @@ function rowToSeries(r: Record<string, unknown>): Series {
     protagonistGender: r.protagonist_gender  as Series['protagonistGender'],
     totalEpisodes:     r.total_episodes      as Series['totalEpisodes'],
     episodeCount:      (r.episode_count      as number) ?? 0,
-    lastOptions:       (r.last_options       as SeriesLastOptions | null) ?? undefined,
+    illustrationStyle: (lastOpts?.illustrationStyle ?? 'anime'),
+    characterSheet:    lastOpts?.characterSheet,
+    lastOptions:       lastOpts,
     createdAt:         Number(r.created_at),
   };
 }
@@ -135,7 +138,11 @@ export async function saveSeries(series: Series): Promise<void> {
     protagonist_gender: series.protagonistGender,
     total_episodes:     series.totalEpisodes,
     episode_count:      series.episodeCount,
-    last_options:       series.lastOptions ?? null,
+    last_options:       {
+                           ...(series.lastOptions ?? {}),
+                           illustrationStyle: series.illustrationStyle ?? 'anime',
+                           characterSheet:    series.characterSheet ?? null,
+                         },
     created_at:         series.createdAt,
   });
 }
@@ -160,10 +167,16 @@ export async function updateSeriesLastOptions(
   seriesId: string, options: SeriesLastOptions
 ): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
+  const { data: existing } = await supabase.from('series')
+    .select('last_options')
+    .eq('id', seriesId).eq('user_id', user_id).maybeSingle();
+  const prev = (existing?.last_options ?? {}) as Record<string, unknown>;
+  const merged = { ...prev, ...options };
   await supabase.from('series')
-    .update({ last_options: options })
+    .update({ last_options: merged })
     .eq('id', seriesId).eq('user_id', user_id);
 }
+
 
 export async function updateSeriesTitle(seriesId: string, title: string): Promise<void> {
   const user_id = await uid(); if (!user_id) return;
