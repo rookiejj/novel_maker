@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict oEIlmyLT7fiCFy9DBq5GYJi9hg9EsgWo0zAdaE2s3XMq62wyhs8WklxITni0sG8
+\restrict v5D1Jtl0IDxUmJwCY9AaFRCiqLj4JIw1AUIwqEoVYMTDXZotmP9iVmtkfqYnbOp
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3
@@ -403,5 +403,5 @@ CREATE POLICY "본인 데이터만" ON public.world_bibles USING ((auth.uid() = 
 -- PostgreSQL database dump complete
 --
 
-\unrestrict oEIlmyLT7fiCFy9DBq5GYJi9hg9EsgWo0zAdaE2s3XMq62wyhs8WklxITni0sG8
+\unrestrict v5D1Jtl0IDxUmJwCY9AaFRCiqLj4JIw1AUIwqEoVYMTDXZotmP9iVmtkfqYnbOp
 
