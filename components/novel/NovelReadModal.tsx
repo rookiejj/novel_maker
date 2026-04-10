@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import type { NovelRecord, Series } from '@/lib/types';
 import { GENRE_MAP, ATMOSPHERE_MAP, MOOD_MAP } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
@@ -37,9 +37,20 @@ export default function NovelReadModal({
 
   // 모달 콘텐츠 영역 아무 데나 클릭해도 닫히게 한다.
   // 단, 사용자가 텍스트를 드래그 선택한 상태(복사 중)면 닫지 않는다.
+  //
+  // ★ stopPropagation 필수 ★
+  // 바깥 backdrop에도 onClick={dismiss}가 걸려 있어서, 버블링을 막지 않으면
+  // 콘텐츠 탭 한 번에 dismiss()가 두 번 호출된다. 두 번째 dismiss()는 첫
+  // 번째의 history.back()이 popstate를 발생시키기 전 타이밍이라
+  // pushedRef/consumedRef 상태가 "아직 엔트리 있음"으로 읽혀 또 back()을
+  // 호출하고, 결과적으로 안드로이드 크롬에서 두 스텝 뒤로 가버려
+  // 로그인 콜백 페이지로 이동하는 버그가 발생한다. iOS Safari는 타이밍이
+  // 달라 증상이 드러나지 않지만 잠재적으로 동일 문제.
+  //
   // 내부 인터랙티브 요소(× 버튼, 재시도 버튼, 네비게이션 푸터)는 각자
-  // stopPropagation으로 이 핸들러까지 이벤트가 올라오지 않도록 막는다.
-  const handleContentClick = () => {
+  // stopPropagation으로 이 핸들러까지 이벤트가 올라오지 않도록 이미 막혀 있다.
+  const handleContentClick = (e: MouseEvent) => {
+    e.stopPropagation();
     if (typeof window !== 'undefined') {
       const selection = window.getSelection();
       if (selection && selection.toString().length > 0) {
