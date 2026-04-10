@@ -48,7 +48,7 @@ export interface MoodRecord {
 // ─── Novel ────────────────────────────────────────────────────────────────────
 
 export type Genre =
-  | '로맨스' | 'SF' | '판타지' | '공포'
+  | '로맨스' | 'BL' | 'SF' | '판타지' | '공포'
   | '미스터리' | '일상' | '성장' | '역사' | '동화';
 
 export type Atmosphere =
@@ -67,6 +67,7 @@ export type ProtagGender = '남성' | '여성' | '중성';
 
 export const GENRE_MAP: Record<Genre, { icon: string; label: string }> = {
   '로맨스':   { icon: '💕', label: '로맨스'   },
+  'BL':       { icon: '🌈', label: 'BL'       },
   'SF':       { icon: '🚀', label: 'SF'       },
   '판타지':   { icon: '🔮', label: '판타지'   },
   '공포':     { icon: '👻', label: '공포'     },

@@ -240,6 +240,7 @@ const FAIRYTALE_NARRATIVE_DEVICES = [
 
 const WRITER_PERSONA: Record<string, string> = {
   '로맨스':   '설렘과 감정의 결을 섬세하게 포착하는 한국어 로맨스 소설 작가',
+  'BL':       '두 남성 인물 사이의 섬세한 감정선과 관계의 긴장을 품격 있게 그려내는 한국어 BL(Boys Love) 소설 작가',
   'SF':       '인간과 기술, 미래의 경계를 탐구하는 한국어 SF 소설 작가',
   '판타지':   '상상력 넘치는 세계와 인물을 생생하게 구현하는 한국어 판타지 소설 작가',
   '공포':     '독자의 등골을 서늘하게 만드는 긴장감과 불안을 조율하는 한국어 공포 소설 작가',
@@ -255,6 +256,17 @@ const WRITER_PERSONA: Record<string, string> = {
 // 동화는 일반 소설과 타깃·톤·어휘·갈등 수위가 전혀 다르기 때문에, 시스템
 // 프롬프트의 "창작 지침" 블록에 이 내용이 통째로 들어가야 한다.
 // (다른 장르에는 주입되지 않음)
+const BL_GUIDELINES = `
+## BL 장르 작성 지침 (매우 중요)
+
+- 두 남성 주인공의 감정선·관계 발전·내적 갈등을 이야기 중심에 둔다.
+- 첫 만남의 떨림, 오해, 질투, 화해 같은 로맨스 요소를 적극 활용하되 진부하지 않게 변주한다.
+- 신체 묘사는 감정의 흐름을 보조하는 선에서 절제된 언어로 표현한다 (시선, 손끝, 호흡, 체온 등).
+- 노골적인 성행위 묘사는 지양하고, 여운과 암시로 처리한다.
+- 동성 관계에 대한 자기 수용·주변의 시선 같은 주제를 자연스럽게 녹일 수 있다.
+- 두 인물의 직업·배경·성격 차이에서 오는 케미스트리를 적극적으로 살린다.
+`;
+
 const FAIRYTALE_GUIDELINES = `
 ## 동화 작성 지침 (매우 중요)
 
@@ -344,6 +356,7 @@ export function buildSystemPrompt({ config, recentMoods }: PromptInput): string 
     : '';
 
   const fairytaleGuidelines = isFairytale ? FAIRYTALE_GUIDELINES : '';
+  const blGuidelines = genre === 'BL' ? BL_GUIDELINES : '';
 
   return `당신은 ${persona}입니다.
 하나의 긴 이야기를 여러 편에 걸쳐 이어가는 연재 ${isFairytale ? '동화' : '소설'}를 씁니다.
@@ -359,6 +372,7 @@ ${contextSection}
 ${worldSection}
 ${continuitySection}
 ${fairytaleGuidelines}
+${blGuidelines}
 ## 창작 지침
 
 **이번 편 서사 장치:** ${narrativeDevice}

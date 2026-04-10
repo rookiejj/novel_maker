@@ -1,17 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Genre, Atmosphere, WritingStyle, NovelLength, NovelOptions, SeriesLength, ProtagGender, SeriesLastOptions } from '@/lib/types';
 import TwEmoji from '@/components/ui/TwEmoji';
 
-const GENRES: Genre[]       = ['로맨스', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사', '동화'];
+const GENRES: Genre[]       = ['로맨스', 'BL', 'SF', '판타지', '공포', '미스터리', '일상', '성장', '역사', '동화'];
 const ATMOSPHERES: Atmosphere[] = ['따뜻한', '서늘한', '몽환적인', '긴장감 있는', '유쾌한', '슬픈', '잔잔한'];
 const STYLES: WritingStyle[]    = ['간결한 문체', '서정적 문체', '대화 중심', '묘사 중심'];
 const LENGTHS: NovelLength[]    = ['단편 (500자)', '중편 (1500자)', '장편 (3000자)'];
 const SERIES_LENGTHS: SeriesLength[] = [10, 20, 30];
 
 const GENRE_EMOJI: Record<Genre, string> = {
-  '로맨스': '💕', 'SF': '🚀', '판타지': '🔮', '공포': '👻',
+  '로맨스': '💕', 'BL': '🌈', 'SF': '🚀', '판타지': '🔮', '공포': '👻',
   '미스터리': '🔍', '일상': '☕', '성장': '🌱', '역사': '📜',
   '동화': '🧸',
 };
@@ -36,6 +36,13 @@ export default function NovelWizard({
   const [protagonistName, setProtagonistName] = useState('');
   const [totalEpisodes,   setTotalEpisodes]   = useState<SeriesLength>(10);
   const [gender,          setGender]          = useState<ProtagGender | null>('중성');
+
+  // BL 장르는 두 남성 주인공이 전제이므로 성별을 '남성'으로 고정
+  useEffect(() => {
+    if (genre === 'BL' && gender !== '남성') {
+      setGender('남성');
+    }
+  }, [genre, gender]);
 
   const isNewSeries = !lockedGenre;
 
@@ -112,11 +119,12 @@ export default function NovelWizard({
                 <button
                   key={g}
                   onClick={() => setGender(g)}
+                  disabled={genre === 'BL' && g !== '남성'}
                   className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
                     gender === g
                       ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
-                  }`}
+                  } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-200`}
                 >
                   {g === '남성' ? '👦 남성' : g === '여성' ? '👧 여성' : '🧑 중성'}
                 </button>
