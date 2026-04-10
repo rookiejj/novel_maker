@@ -241,6 +241,29 @@ Footer는 항상 표시되지만, `canSave = (status === 'done' && !saved && raw
 
 이 분기는 모두 `isFairytale` 플래그 기반으로 한 함수 안에 격리되어 있어, 다른 장르의 프롬프트에는 한 글자도 영향을 주지 않습니다.
 
+### BL 장르와 일러스트 스타일
+
+장르 목록에 `'BL'`이 추가되어 있고, 위자드에서 BL을 선택하면 주인공 성별이 자동으로 `'남성'`으로 고정되며 여성 버튼이 비활성화됩니다. `prompts/novelist.ts`의 `WRITER_PERSONA['BL']`과 `BL_GUIDELINES` 블록이 시스템 프롬프트에 주입되어 "두 남성 주인공 중심, 절제된 감정 묘사, 여성 로맨스 상대 금지"를 강제합니다.
+
+위자드에는 **일러스트 스타일** 선택(`🎨 애니메이션` / `📷 실사`)도 있습니다. 시리즈 생성 시 한 번 정해지면 시리즈 전체에 고정(`lockedIllustStyle`). 동화 장르는 수채화 그림책 톤이 필수이므로 실사 버튼이 자동 비활성화됩니다. 스타일 값은 `series.last_options.illustrationStyle`에 저장되며 매 편 일러스트 프롬프트 빌드 시 사용됩니다.
+
+주인공 성별은 `'남성' | '여성'` 이분 enum이며 중성 옵션은 없습니다. 중성은 Haiku가 영어로 번역할 때 `"androgynous"` / `"young person"` 같은 모호한 키워드로 흘러 Flux가 성별을 번복하는 원인이 되어 제거했습니다.
+
+### 캐릭터 시트 — 시리즈 인물 일관성
+
+편마다 주인공 외형·성별이 흔들리는 문제를 해결하기 위해 시리즈 단위 **캐릭터 시트**를 도입했습니다. 시트는 `series.last_options.characterSheet` JSONB에 저장되며 구조는 `lib/types.ts`의 `CharacterSheet`와 `Character` 타입에 정의되어 있습니다. 각 캐릭터는 `name / role / gender / pronoun / ageRange / appearance / outfit` 필드를 가집니다.
+
+생성 흐름은 일러스트 API에서 처리됩니다:
+
+1. **`createBaseSheet(config)`** — 위자드 정보(성별·이름·BL 여부)로 **즉시** 완전한 시트를 구성합니다. 위자드가 확정한 값이 기반이므로 이 단계는 실패하지 않습니다. BL일 경우 상대역도 자동으로 남성으로 추가됩니다.
+2. **`enrichSheetFromNovel(base, content)`** — Haiku가 본문에서 발견한 외형·복장·나이대 디테일만 base sheet에 보강합니다. Haiku에게 주는 시스템 프롬프트(`buildSheetEnrichmentSystemPrompt`)는 "본문에 명시적 묘사가 있는 것만 반영, 상상·추측 금지, `gender/name/role/pronoun`은 절대 수정 금지"를 명시합니다. `temperature: 0.2`로 안정성을 확보하고, JSON 파싱·구조 검증이 실패하면 `return base`로 항상 원본을 돌려줍니다. **실패 경로가 존재하지 않습니다.**
+3. **머지 단계 immutable 가드** — Haiku 결과를 그대로 저장하지 않고, base의 `name/role/gender/pronoun`으로 덮어씁니다. Haiku가 지시를 어기고 성별을 바꿔도 여기서 차단됩니다.
+4. **service-role로 직접 저장** — API route 컨텍스트에서는 `lib/supabase/db.ts`의 함수들이 쿠키 기반 유저 컨텍스트에 의존해 `uid()`가 `null`을 반환하고 silent-fail합니다. 대신 `route.ts`가 이미 검증한 `user.id`와 service-role 클라이언트로 직접 `series.last_options`를 update합니다.
+
+일러스트 프롬프트 조립은 Haiku의 자연어 묘사에 성별을 맡기지 않고 **서버가 직접 영어 키워드를 append**합니다. `buildCharacterClause(sheet)`가 시트를 `"a 20s Korean man (short black hair, slim build, wearing navy blazer), all characters are adult men, masculine features, no women, no female characters, anatomically correct, natural pose, intact limbs, both hands visible, fully clothed"` 형태로 변환해 Haiku가 생성한 장면 묘사 뒤에 붙입니다. 이 방식으로 Flux가 성별·외형을 번복할 여지를 제거합니다.
+
+2편 이후로는 `if (!characterSheet)` 분기가 skip되고 기존 시트를 그대로 로드·주입합니다. 연재가 길어져도 인물 외형이 고정되는 이유입니다.
+
 ### 자동 스크롤
 
 `HomeView`는 `step` 전이에 맞춰 두 가지 자동 스크롤을 수행합니다.
@@ -289,10 +312,11 @@ Footer는 항상 표시되지만, `canSave = (status === 'done' && !saved && raw
    │                                    │ 3. status='generating'으로 업데이트
    │                                    │ 4. Claude Haiku에 프롬프트 생성 요청
    │                                    │    (장르별 스타일 분기 — 동화는 수채화 그림책 톤)
-   │                                    │ 5. Fal.ai (flux/schnell) 호출 — 4:3 landscape
-   │                                    │ 6. 이미지 바이트 다운로드
-   │                                    │ 7. Supabase Storage 업로드 (service_role 클라이언트)
-   │                                    │ 8. novels.illustration_url + status='done' 업데이트
+   │                                    │ 5. 캐릭터 시트 로드 또는 생성 (위자드 정보로 base sheet → Haiku 본문 보강 → service-role로 series.last_options에 저장)
+   │                                    │ 6. Fal.ai (flux/dev, 28 steps) 호출 — 4:3 landscape, 캐릭터 시트를 영어 clause로 프롬프트에 append
+   │                                    │ 7. 이미지 바이트 다운로드
+   │                                    │ 8. Supabase Storage 업로드 (service_role 클라이언트)
+   │                                    │ 9. novels.illustration_url + status='done' 업데이트
    │                                    │    실패 시 status='failed'
    │                                    │
    │ (탭 닫혀도 keepalive:true로 진행)  │
