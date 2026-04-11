@@ -103,6 +103,16 @@ CREATE POLICY "Users can delete own illustrations" ON storage.objects FOR DELETE
 
 > ⚠️ 서버의 `/api/illustration` 라우트는 Storage 업로드에 한해 **service_role 클라이언트를 별도로 사용**하여 RLS를 우회합니다. `@supabase/ssr`의 cookie 기반 클라이언트가 Storage 요청에서 세션 전파가 불안정한 경우가 있기 때문입니다. 인증(사용자 식별)은 여전히 cookie 기반 클라이언트로 수행하므로, service_role은 "경로에 검증된 user_id를 강제하는" 방식으로만 쓰여 안전합니다.
 
+### 4. 스키마 스냅샷
+
+`supabase/schema.sql`은 위 테이블·인덱스·RLS 정책·함수의 DDL을 담은 스냅샷입니다.
+Claude가 DB 관련 작업을 할 때 이 파일을 먼저 읽어 현재 스키마 상태를 파악합니다.
+대시보드에서 스키마를 변경했다면 로컬에서 아래 명령으로 갱신 후 커밋하세요.
+
+```bash
+supabase db dump --schema public -f supabase/schema.sql
+```
+
 ## Vercel 배포
 
 ```bash
